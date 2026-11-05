@@ -1,0 +1,2845 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IE Chair 即時同步監控中心</title>
+  <!-- 載入 Mermaid 繪圖庫 -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 1200px; margin: 30px auto; padding: 0 20px;
+      color: #1e293b; background: #f8fafc;
+    }
+    h1, h2 { color: #0f172a; }
+    .control-bar {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+      background: #fff; padding: 16px; border-radius: 12px;
+      border: 1px solid #e2e8f0; margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+    select, button {
+      font-size: 15px; padding: 8px 14px; border-radius: 8px;
+      border: 1px solid #cbd5e1; cursor: pointer;
+    }
+    .btn-primary { background: #2563eb; color: #fff; border: none; font-weight: bold; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-edit { background: #7c3aed; color: #fff; border: none; font-weight: bold; }
+    .btn-edit:hover { background: #6d28d9; }
+    .btn-danger { background: #dc2626; color: #fff; border: none; }
+    .btn-secondary { background: #0284c7; color: #fff; border: none; }
+    
+    /* 即時同步動態圓點 */
+    .live-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #ecfdf5; border: 1px solid #a7f3d0;
+      color: #065f46; padding: 6px 12px; border-radius: 20px;
+      font-size: 13px; font-weight: bold; margin-left: 10px;
+    }
+    .pulse-dot {
+      width: 10px; height: 10px; background-color: #10b981;
+      border-radius: 50%; display: inline-block;
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .card {
+      background: #fff; border-radius: 12px; padding: 20px;
+      margin-bottom: 24px; border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+    #flowchartContainer {
+      width: 100%; min-height: 200px; overflow-x: auto;
+      display: flex; justify-content: center; align-items: center;
+      background: #ffffff; border-radius: 8px; padding: 15px;
+    }
+    .legend {
+      display: flex; gap: 15px; font-size: 13px; color: #64748b;
+      margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .color-box { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+
+    table {
+      width: 100%; border-collapse: collapse; margin-top: 10px;
+      background: #fff; border-radius: 8px; overflow: hidden;
+    }
+    th, td {
+      border: 1px solid #e2e8f0; padding: 10px 12px; text-align: center;
+      font-size: 14px;
+    }
+    th { background: #f1f5f9; color: #475569; font-weight: 600; }
+    tr:nth-child(even) { background: #f8fafc; }
+    
+    /* 彈跳視窗 Modal */
+    .modal {
+      display: none; position: fixed; z-index: 100; left: 0; top: 0;
+      width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(2px);
+    }
+    .modal-content {
+      background: #fff; margin: 40px auto; padding: 24px;
+      border-radius: 14px; max-width: 600px; width: 90%;
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+    }
+    .flow-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+      background: #f8fafc; padding: 8px 12px; border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🪑 IE Chair 組裝線即時監控中心</h1>
+  
+  <div class="control-bar">
+    <label><strong>組別：</strong></label>
+    <select id="groupSelect">
+      <option value="G01">G01</option>
+      <option value="G02" selected>G02</option>
+      <option value="G03">G03</option>
+      <option value="G04">G04</option>
+      <option value="G05">G05</option>
+      <option value="G06">G06</option>
+      <option value="G07">G07</option>
+      <option value="G08">G08</option>
+      <option value="G09">G09</option>
+      <option value="G10">G10</option>
+      <option value="G11">G11</option>
+      <option value="G12">G12</option>
+      <option value="G13">G13</option>
+      <option value="G14">G14</option>
+      <option value="G15">G15</option>
+      <option value="G16">G16</option>
+      <option value="G17">G17</option>
+      <option value="G18">G18</option>
+      <option value="G19">G19</option>
+      <option value="G20">G20</option>
+      <option value="ALL">全部組別 (僅表格)</option>
+    </select>
+    <button id="bindGroupUrlBtn" type="button" onclick="bindCurrentGroupUrl()" style="padding:6px 10px; font-size:12px; font-weight:bold; border-radius:8px; border:1px solid #93c5fd; background:#eff6ff; color:#1d4ed8; cursor:pointer;" title="將此視窗與網址永久鎖定為目前選取的組別（鎖定後即使解鎖管理員也無法切換組別）">
+      📌 鎖定此組別
+    </button>
+    <span id="lockedGroupBadge" style="display:none; align-items:center; gap:4px; padding:6px 12px; font-size:14px; font-weight:800; border-radius:8px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; user-select:none;" title="此專屬網址已永久綁定該組別，即使解鎖管理員亦不可切換至其他組別">
+      🔒 專屬組別：<span id="lockedGroupText">G01</span>
+    </span>
+
+    <a id="topGotoQrcodeBtn" href="qrcode.html" style="font-size:13px; font-weight:bold; color:#fff; background:#0284c7; padding:8px 14px; border-radius:8px; text-decoration:none; display:inline-flex; align-items:center; gap:5px; box-shadow:0 1px 3px rgba(0,0,0,0.1);" title="前往本組專屬 QR Code 桌牌與料號設定頁面">
+      🖨️ 前往【G02】QR Code 頁面 ❯
+    </a>
+
+    <button id="loadBtn" class="btn-primary">🔄 手動重新整理</button>
+    <button id="downloadBtn" disabled>📥 下載 CSV</button>
+    
+    <!-- 預設啟動即時同步 -->
+    <div class="live-badge">
+      <span class="pulse-dot"></span>
+      <span>即時同步：</span>
+      <select id="refreshIntervalSelect" style="padding:2px 6px; font-size:12px; border-radius:4px; border:1px solid #a7f3d0; background:#fff;">
+        <option value="3000" selected>每 3 秒</option>
+        <option value="5000">每 5 秒</option>
+        <option value="10000">每 10 秒</option>
+        <option value="0">暫停同步</option>
+      </select>
+    </div>
+
+    <!-- 🎯 實作模式與測試組數 (僅限管理員調整，現場看板模式僅唯讀顯示) -->
+    <div id="modeControlBox" style="display:inline-flex; align-items:center; gap:6px; background:#f8fafc; border:1px solid #cbd5e1; padding:4px 10px; border-radius:8px; flex-wrap:wrap;">
+      <span style="font-size:13px; font-weight:bold; color:#334155;">🎯 實作模式：</span>
+      <!-- 🔒 未解鎖管理員時顯示唯讀徽章，學生無法自行調整 -->
+      <span id="readonlyModeBadge" onclick="alert('🔒 實作模式與「第幾次測試」僅限管理員調整！\n請點擊右側「🔒 現場看板模式 (點擊解鎖管理)」輸入管理員密碼後即可修改。')" style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; font-size:12px; font-weight:bold; border-radius:6px; border:1px solid #d8b4fe; background:#f3e8ff; color:#7e22ce; cursor:pointer; user-select:none;" title="僅限管理員調整（點擊右側解鎖管理員後可切換第 1~10 次測試或正式實作）">
+        🔒 🧪 第 1 次測試 (僅管理員可調)
+      </span>
+      <!-- 🔓 解鎖管理員後才顯示的測試組數與實作模式控制項 -->
+      <span id="adminModeControls" style="display:none; align-items:center; gap:6px; flex-wrap:wrap;">
+        <button id="modeTestBtn" onclick="changeSystemMode(0)" style="padding:4px 10px; font-size:12px; font-weight:bold; border-radius:6px; border:1px solid #93c5fd; background:#eff6ff; color:#1d4ed8; cursor:pointer;" title="點擊切換為測試練習模式（僅管理員可調整）">
+          🧪 測試練習
+        </button>
+        <!-- 🧪 測試組數 (第 1~10 次) 選單與確認按鈕 (僅管理員可調整) -->
+        <span id="testRoundBox" style="display:inline-flex; align-items:center; gap:4px; background:#f3e8ff; padding:2px 8px; border-radius:6px; border:1px solid #d8b4fe;">
+          <span style="font-size:12px; color:#6b21a8; font-weight:bold;">測試組數:</span>
+          <select id="testRoundSelect" onchange="onTestRoundSelectChange(this.value)" style="padding:2px 6px; font-size:12px; font-weight:bold; color:#6b21a8; border-radius:4px; border:1px solid #c084fc; background:#fff; cursor:pointer;">
+            <option value="1">第 1 次測試</option>
+            <option value="2">第 2 次測試</option>
+            <option value="3">第 3 次測試</option>
+            <option value="4">第 4 次測試</option>
+            <option value="5">第 5 次測試</option>
+            <option value="6">第 6 次測試</option>
+            <option value="7">第 7 次測試</option>
+            <option value="8">第 8 次測試</option>
+            <option value="9">第 9 次測試</option>
+            <option value="10">第 10 次測試</option>
+          </select>
+          <button id="confirmTestRoundBtn" type="button" onclick="confirmTestRound()" style="padding:2px 8px; font-size:12px; font-weight:bold; border-radius:4px; border:1px solid #7e22ce; background:#9333ea; color:#fff; cursor:pointer;" title="管理員選擇第幾次測試並點擊確認">
+            ✅ 確認
+          </button>
+        </span>
+        <button id="modeOfficialBtn" onclick="changeSystemMode(1)" style="padding:4px 10px; font-size:12px; font-weight:bold; border-radius:6px; border:1px solid #cbd5e1; background:#fff; color:#64748b; cursor:pointer;" title="點擊切換為正式實作評分模式（僅管理員可調整）">
+          🏆 正式實作 (評分)
+        </button>
+      </span>
+    </div>
+
+    <div id="adminControlsArea" style="display:flex; align-items:center; gap:8px; margin-left:auto; flex-wrap:wrap;">
+      <button id="adminToggleBtn" onclick="toggleAdmin()" style="padding:6px 14px; font-size:13px; font-weight:bold; border-radius:8px; border:1px solid #cbd5e1; background:#f8fafc; color:#334155; cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:all 0.2s;" title="點擊解鎖管理員以啟用防呆秒數設定、清空與自訂功能">
+        🔒 現場看板模式 (點擊解鎖管理)
+      </button>
+      <!-- 🛡️ 管理員專屬：開工防呆與完工冷卻/起始間隔設定 (整合自手機計時器，僅管理員可改) -->
+      <div id="adminCooldownBox" style="display:none; align-items:center; gap:6px; background:#eff6ff; padding:4px 10px; border-radius:8px; border:1px solid #93c5fd;">
+        <span style="font-size:12px; color:#1e40af; font-weight:bold;">🛡️ 開工防呆:</span>
+        <select id="systemCooldownSelect" onchange="changeSystemCooldown()" style="padding:2px 6px; font-size:12px; font-weight:bold; color:#1e40af; border-radius:4px; border:1px solid #93c5fd; background:#fff; cursor:pointer;" title="開工後未滿此秒數禁止完工（僅管理員可更改）">
+          <option value="1">1 秒</option>
+          <option value="2">2 秒</option>
+          <option value="3" selected>3 秒</option>
+          <option value="4">4 秒</option>
+          <option value="5">5 秒</option>
+        </select>
+        <span style="border-left:1px solid #93c5fd; height:14px; margin:0 2px;"></span>
+        <span style="font-size:12px; color:#065f46; font-weight:bold;">⏳ 完工冷卻/起始間隔:</span>
+        <select id="systemFinishCooldownSelect" onchange="changeSystemCooldown()" style="padding:2px 6px; font-size:12px; font-weight:bold; color:#065f46; border-radius:4px; border:1px solid #6ee7b7; background:#fff; cursor:pointer;" title="掃描完工後冷卻秒數，同時作為起始站第2件起之到料提示間隔（3~5秒，僅管理員可更改）">
+          <option value="1">1 秒</option>
+          <option value="2">2 秒</option>
+          <option value="3">3 秒</option>
+          <option value="4" selected>4 秒</option>
+          <option value="5">5 秒</option>
+        </select>
+      </div>
+      <button id="groupLinksModalBtn" onclick="openGroupLinksModal()" style="display:none; padding:6px 12px; font-size:12px; font-weight:bold; border-radius:8px; border:1px solid #0284c7; background:#e0f2fe; color:#0369a1; cursor:pointer;" title="產生並複製 G01~G20 各組專屬工蓋螢幕與 QR Code 連結">
+        🔗 各組專屬網址清單
+      </button>
+      <button id="changePinBtn" onclick="changeAdminPin()" style="display:none; padding:6px 10px; font-size:12px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; color:#475569; cursor:pointer;" title="變更管理員密碼">
+        ⚙️ 改密碼
+      </button>
+      <button id="openFlowEditorBtn" class="btn-edit" style="display:none;">
+        🛠️ 自訂本組工站順序
+      </button>
+      <button id="deleteAllBtn" class="btn-danger" style="display:none;">🗑️ 清空紀錄與庫存歸零</button>
+      <button id="deleteEntireGroupBtn" class="btn-danger" style="display:none; background:#991b1b; border:1px solid #7f1d1d;" title="徹底刪除此組別在所有測試場次(第1~10次)與正式實作的全部計時紀錄，並將庫存歸零">💥 刪除本組全部場次數據</button>
+    </div>
+    <span id="status">即時更新中</span>
+  </div>
+
+  <!-- 區塊 1：工站流程順序圖與 站前/站後 WIP 看板 -->
+  <div class="card" id="flowCard">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <h2 style="margin:0; display:flex; align-items:center; gap:8px;">
+          <span>1. 工站順序圖與在製品 (WIP) 即時看板</span>
+          <span id="flowGroupTitleBadge" style="background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; padding:2px 10px; border-radius:8px; font-size:16px; font-weight:800;">【G02】</span>
+        </h2>
+        <div style="display:inline-flex; align-items:center; gap:6px; background:#faf5ff; border:1px solid #d8b4fe; padding:4px 10px; border-radius:8px;">
+          <span style="font-size:12px; font-weight:bold; color:#6b21a8;">👁️ 檢視場次：</span>
+          <select id="flowViewRoundSelect" onchange="onFlowViewRoundChange(this.value)" style="padding:2px 8px; font-size:12px; font-weight:bold; border-radius:6px; border:1px solid #c084fc; background:#fff; color:#6b21a8; cursor:pointer;" title="可隨時切換檢視第 1~10 次測試或正式實作的獨立流程圖與成績，互不影響">
+            <option value="AUTO">🎯 自動跟隨目前場次</option>
+            <option value="OFFICIAL">🏆 檢視：正式實作 (評分)</option>
+            <option value="1">🧪 檢視：第 1 次測試</option>
+            <option value="2">🧪 檢視：第 2 次測試</option>
+            <option value="3">🧪 檢視：第 3 次測試</option>
+            <option value="4">🧪 檢視：第 4 次測試</option>
+            <option value="5">🧪 檢視：第 5 次測試</option>
+            <option value="6">🧪 檢視：第 6 次測試</option>
+            <option value="7">🧪 檢視：第 7 次測試</option>
+            <option value="8">🧪 檢視：第 8 次測試</option>
+            <option value="9">🧪 檢視：第 9 次測試</option>
+            <option value="10">🧪 檢視：第 10 次測試</option>
+          </select>
+          <span id="flowViewRoundStatusTag" style="font-size:11px; font-weight:bold; color:#7e22ce; background:#f3e8ff; padding:2px 6px; border-radius:4px;">目前場次</span>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <a id="gotoQrcodeBtn" href="qrcode.html" target="_blank" style="font-size:13px; font-weight:bold; color:#2563eb; background:#eff6ff; padding:6px 12px; border-radius:8px; border:1px solid #bfdbfe; text-decoration:none; display:none; align-items:center; gap:4px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+          🖨️ 前往【--】QR Code 桌牌與料號設定 ❯
+        </a>
+        <button id="editFlowInCardBtn" onclick="openFlowModal()" style="display:none; font-size:13px; color:#7c3aed; background:none; border:none; cursor:pointer; text-decoration:underline;">
+          ✏️ 修改此順序圖
+        </button>
+      </div>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="color-box" style="background:#dcfce7; border:1px solid #16a34a;"></span> 綠燈：流暢正常 (物料充足)</div>
+      <div class="legend-item"><span class="color-box" style="background:#fef9c3; border:1px solid #ca8a04;"></span> 黃燈：飢餓缺料 (站前為 0 件/套)</div>
+      <div class="legend-item"><span class="color-box" style="background:#fee2e2; border:2px solid #dc2626;"></span> 🚨 紅燈：瓶頸站（該組 Cycle Time 最大值）</div>
+    </div>
+    <div id="flowchartContainer">
+      <div style="color:#94a3b8;">載入流程圖中...</div>
+    </div>
+  </div>
+
+  <!-- 區塊 2：工站統計摘要 (Cycle Time, 等待時間, 稼動率, 生產活動 Cycle Time) -->
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <h2 style="margin:0;">2. 統計摘要與產線 Cycle Time 分析（依工站）</h2>
+      <span style="font-size:13px; color:#475569; background:#f1f5f9; padding:4px 10px; border-radius:6px;">🎯 產線瓶頸判定：<b>該組平均 Cycle Time 之最大值</b></span>
+    </div>
+    <p style="color:#64748b; font-size:14px; margin:6px 0 10px 0;">
+      說明：<b>本次生產活動 Cycle Time = 該次生產活動總耗時（首件開工至末件完工）÷ 共產出成品組數</b>。等待時間 = 站內換件閒置 + 下游等料飢餓時間。稼動率 = 作業時間 ÷（作業時間 + 等待時間）。線平衡率 = 各站 Cycle Time 總和 ÷（站數 × 瓶頸 Cycle Time）。
+    </p>
+
+    <!-- ⏱️ 本次生產活動 Cycle Time 即時計算看板 (常駐顯示) -->
+    <div id="taktTimeBanner" style="display:block; background:linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border:1px solid #7dd3fc; border-radius:10px; padding:12px 16px; margin-bottom:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-size:18px;">⏱️</span>
+          <span style="font-weight:800; color:#0369a1; font-size:15px;">本次生產活動 Cycle Time 計算分析</span>
+          <span id="taktRoundTag" style="font-size:12px; font-weight:bold; padding:2px 8px; border-radius:6px; background:#fff; color:#0284c7; border:1px solid #bae6fd;">--</span>
+        </div>
+        <span style="font-size:12px; color:#0369a1; font-weight:600;">📐 公式：Cycle Time = 該次活動總生產時間 ÷ 共產出組數</span>
+      </div>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap:10px;">
+        <div style="background:#fff; border:1px solid #bae6fd; border-radius:8px; padding:10px 12px;">
+          <div style="font-size:12px; color:#64748b; font-weight:bold;">📦 共產出組數 (總成品數)</div>
+          <div id="taktOutputCountText" style="font-size:22px; font-weight:800; color:#0f172a; margin-top:2px;">0 組</div>
+          <div id="taktOutputSubText" style="font-size:11px; color:#64748b; margin-top:2px;">依終點工站累計完工數</div>
+        </div>
+        <div style="background:#fff; border:1px solid #bae6fd; border-radius:8px; padding:10px 12px;">
+          <div style="font-size:12px; color:#64748b; font-weight:bold;">⏳ 該次生產活動總耗時</div>
+          <div id="taktTotalTimeText" style="font-size:22px; font-weight:800; color:#0f172a; margin-top:2px;">0.0 秒</div>
+          <div id="taktTimeRangeText" style="font-size:11px; color:#64748b; margin-top:2px;">首件開工 ➔ 末件完工</div>
+        </div>
+        <div style="background:#ecfeff; border:2px solid #06b6d4; border-radius:8px; padding:10px 12px;">
+          <div style="font-size:12px; color:#0e7490; font-weight:bold;">🎯 本次生產活動 Cycle Time</div>
+          <div id="taktValueText" style="font-size:24px; font-weight:900; color:#0891b2; margin-top:2px;">-- 秒/組</div>
+          <div id="taktFormulaDetailText" style="font-size:11px; color:#0e7490; margin-top:2px; font-weight:600;">尚無產出組數</div>
+        </div>
+        <div style="background:#fff; border:1px solid #bae6fd; border-radius:8px; padding:10px 12px;">
+          <div style="font-size:12px; color:#64748b; font-weight:bold;">⚖️ 產線平衡與瓶頸站 CT 比對</div>
+          <div id="taktVsBottleneckText" style="font-size:14px; font-weight:800; color:#334155; margin-top:4px;">--</div>
+          <div id="taktSteadyIntervalText" style="font-size:11px; color:#64748b; margin-top:4px;">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 瓶頸即時提醒橫幅 -->
+    <div id="bottleneckBanner" style="display:none; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 14px; margin-bottom:12px; align-items:center; gap:8px;">
+      <span style="font-size:20px;">🚨</span>
+      <span style="font-weight:bold; color:#991b1b;" id="bottleneckBannerText">
+        本組產線瓶頸站：--
+      </span>
+    </div>
+
+    <table id="statTable">
+      <thead>
+        <tr>
+          <th>Station</th>
+          <th>生產料號</th>
+          <th>筆數</th>
+          <th>平均 Cycle Time (秒)</th>
+          <th>與本次 Cycle Time 比較</th>
+          <th>總作業時間 (秒)</th>
+          <th>平均等待時間 (秒)</th>
+          <th>總等待時間 (秒)</th>
+          <th>稼動率 (%)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- 區塊 3：詳細數據 -->
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+      <h2 style="margin:0;">3. 詳細生產歷程數據 (Event Log)</h2>
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+        <span style="font-size:13px; color:#475569; font-weight:bold;">數據篩選：</span>
+        <button id="filterAllBtn" onclick="setTableFilter('ALL')" style="padding:4px 10px; font-size:12px; font-weight:bold; border-radius:6px; border:1px solid #93c5fd; background:#eff6ff; color:#1d4ed8; cursor:pointer;">
+          🔘 全部 (<span id="countAll">0</span>)
+        </button>
+        <button id="filterOfficialBtn" onclick="setTableFilter('OFFICIAL')" style="padding:4px 10px; font-size:12px; font-weight:bold; border-radius:6px; border:1px solid #cbd5e1; background:#fff; color:#166534; cursor:pointer;">
+          🏆 僅看正式 (<span id="countOfficial">0</span>)
+        </button>
+        <button id="filterTestBtn" onclick="setTableFilter('TEST')" style="padding:4px 10px; font-size:12px; font-weight:bold; border-radius:6px; border:1px solid #cbd5e1; background:#fff; color:#7e22ce; cursor:pointer;">
+          🧪 僅看測試 (<span id="countTest">0</span>)
+        </button>
+        <select id="filterTestRoundSelect" onchange="setTestRoundTableFilter(this.value)" style="padding:3px 8px; font-size:12px; font-weight:bold; border-radius:6px; border:1px solid #d8b4fe; background:#faf5ff; color:#6b21a8; cursor:pointer;" title="選擇檢視特定第幾次測試的統計與明細">
+          <option value="ALL_TEST">🔍 測試場次：全部測試 (1~10次)</option>
+          <option value="1">🧪 僅看：第 1 次測試</option>
+          <option value="2">🧪 僅看：第 2 次測試</option>
+          <option value="3">🧪 僅看：第 3 次測試</option>
+          <option value="4">🧪 僅看：第 4 次測試</option>
+          <option value="5">🧪 僅看：第 5 次測試</option>
+          <option value="6">🧪 僅看：第 6 次測試</option>
+          <option value="7">🧪 僅看：第 7 次測試</option>
+          <option value="8">🧪 僅看：第 8 次測試</option>
+          <option value="9">🧪 僅看：第 9 次測試</option>
+          <option value="10">🧪 僅看：第 10 次測試</option>
+        </select>
+      </div>
+    </div>
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th>No. (序號)</th>
+          <th>Group</th>
+          <th>Product</th>
+          <th>Station</th>
+          <th>工站料號</th>
+          <th>開工齊套數</th>
+          <th>開始時間</th>
+          <th>結束時間</th>
+          <th>作業秒數</th>
+          <th>完工累計</th>
+          <th>狀態</th>
+          <th class="admin-only" style="display:none;">操作</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- 彈跳視窗：工站自訂編輯器 (流向順序 + 原生零件配置) -->
+  <div id="flowModal" class="modal">
+    <div class="modal-content" style="max-width: 680px; max-height: 90vh; overflow-y: auto;">
+      <div id=" flowModalTitleBox" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:6px;">
+        <h3 id="flowModalTitle" style="margin:0;">🛠️ 自訂工站前後流向關係</h3>
+        <span id="flowModalRoundBadge" style="font-size:12px; font-weight:bold; background:#f3e8ff; color:#6b21a8; border:1px solid #d8b4fe; padding:3px 10px; border-radius:999px;">目前場次專用流程</span>
+      </div>
+      <div style="font-size:12px; color:#64748b; margin-bottom:8px;">
+        💡 每次測試（第 1~10 次）與正式實作皆可擁有<b>獨立的流程圖與初始備料設定</b>，修改本場次流程不會影響其他場次的流程圖與成績。
+      </div>
+      <div id="flowRowsContainer" style="max-height:220px; overflow-y:auto; margin: 12px 0;"></div>
+      <div style="display:flex; gap:10px;">
+        <button onclick="addFlowRow()" class="btn-secondary">+ 新增銜接關係</button>
+        <button onclick="presetStandardFlow()" style="background:#f1f5f9;">恢復 1→10 標準直線</button>
+      </div>
+
+      <!-- 📦 原生零件投料設定區塊 -->
+      <div style="margin-top:18px; padding:12px; background:#fffbeb; border:1px solid #fde68a; border-radius:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:6px;">
+          <div style="font-weight:bold; color:#92400e; font-size:14px;">
+            📦 各工站站前可用物料與初始備料設定：
+          </div>
+          <span id="modalStationCountBadge" style="font-size:12px; color:#b45309; background:#fef3c7; border:1px solid #fcd34d; padding:2px 8px; border-radius:12px; font-weight:bold;"></span>
+        </div>
+        <div style="font-size:12px; color:#b45309; margin-bottom:10px;">
+          可勾選工站是否需要特定物料投料或起點初始備料。名稱與數量無預設值，未填寫則依前站半成品標準組裝流動。依上方流程順序自動聯動，有幾組工站即出現幾組。
+        </div>
+        <div id="modalRawConfigContainer" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:8px;">
+          <!-- 動態載入各工站的原生零件勾選框與設定 -->
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+        <button onclick="closeFlowModal()">取消</button>
+        <button onclick="saveCustomFlow()" class="btn-primary">儲存並立即更新流程圖</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔗 各組專屬網址清單與一鍵複製 Modal (管理員專用) -->
+  <div id="groupLinksModal" class="modal">
+    <div class="modal-content" style="max-width: 780px; max-height: 85vh; overflow-y: auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 style="margin:0; color:#0f172a;">🔗 各組專屬「工蓋螢幕 ➔ QR Code」綁定網址清單 (G01 ~ G20)</h3>
+        <button onclick="closeGroupLinksModal()" style="padding:4px 10px; font-size:13px;">✕ 關閉</button>
+      </div>
+      <div style="font-size:13px; color:#334155; background:#f0f9ff; border:1px solid #bae6fd; padding:10px 12px; border-radius:8px; margin-bottom:12px; line-height:1.6;">
+        💡 <b>使用說明</b>：將下方專屬網址發給對應組別的學生後：<br>
+        1. 該組打開網址會<b>自動鎖定在自己的組別（如 G01）</b>，無法切換或誤改別組資料。<br>
+        2. 畫面上方提供<b>「🖨️ 前往【G01】QR Code 頁面 ❯」</b>按鈕，點擊即可直接進入該組專屬的 `qrcode.html?group=G01&lock=1`，並可隨時返回本組看板！
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <span style="font-size:12px; color:#64748b;" id="currentSiteBaseHint"></span>
+        <button type="button" class="btn-primary" onclick="copyAllGroupLinks()" style="font-size:13px; padding:6px 14px;">
+          📋 一鍵複製全部 20 組專屬網址清單 (可貼至 Line / 教學平台)
+        </button>
+      </div>
+      <div id="groupLinksListContainer" style="display:flex; flex-direction:column; gap:6px;"></div>
+    </div>
+  </div>
+
+<script>
+const SUPABASE_URL = "https://dnbngzuwaltmkalfyydk.supabase.co";
+const SUPABASE_KEY = "sb_publishable_DeHuWKMzk_smJiNPn4XJfw_-q0MiP-s";
+
+mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
+
+let currentEvents = [];
+const allStations = ["ST01","ST02","ST03","ST04","ST05","ST06","ST07","ST08","ST09","ST10"];
+let autoRefreshTimer = null;
+let refreshInterval = 3000;
+
+// 🏷️ 讀取各組別與各工站之生產料號
+function getStationPart(group, station) {
+  try {
+    const all = JSON.parse(localStorage.getItem("ie_chair_group_station_parts") || "{}");
+    if (group && all[group] && all[group][station]) return all[group][station];
+    const flat = JSON.parse(localStorage.getItem("ie_chair_station_parts") || "{}");
+    if (flat[station]) return flat[station];
+    const old = localStorage.getItem("ie_chair_locked_part_no");
+    if (station === "ST01" && old) return old;
+  } catch(e) {}
+  return "";
+}
+
+// 🧹 自動清除舊版殘留之預設零件設定 (如「零件5 / 4顆」)，確保預設皆為不勾選且無預設值
+(function cleanLegacyRawDefaults() {
+  try {
+    if (!localStorage.getItem("ie_chair_raw_clean_v3")) {
+      const all = JSON.parse(localStorage.getItem("ie_chair_group_station_raw") || "{}");
+      Object.keys(all).forEach(g => {
+        if (all[g] && typeof all[g] === "object") {
+          Object.keys(all[g]).forEach(st => {
+            if (all[g][st] && typeof all[g][st] === "object") {
+              all[g][st].hasRaw = false;
+              all[g][st].rawName = "";
+              all[g][st].rawInit = "";
+            }
+          });
+        }
+      });
+      localStorage.setItem("ie_chair_group_station_raw", JSON.stringify(all));
+      localStorage.setItem("ie_chair_raw_clean_v3", "1");
+    }
+  } catch(e) {}
+})();
+
+// 🧭 取得特定組別與場次之獨立流程圖 Key (例如 G01-T1 ~ G01-T10, G01-OFFICIAL)，不需修改 Supabase 資料表結構即可支援 10 次測試各自擁有獨立流程圖
+function getFlowKeyForRound(group, viewRound) {
+  if (!group || group === "ALL") return group;
+  const vr = viewRound || getEffectiveViewRound();
+  if (vr.mode === "OFFICIAL") return `${group}-OFFICIAL`;
+  const r = Math.min(10, Math.max(1, parseInt(vr.round, 10) || 1));
+  return `${group}-T${r}`;
+}
+
+function getFlowKeyForEvent(row) {
+  if (!row || !row.group_id) return "";
+  const g = row.group_id.trim();
+  if (!isTestProductId(row.product_id)) return `${g}-OFFICIAL`;
+  const r = getTestRoundFromProductId(row.product_id) || 1;
+  return `${g}-T${r}`;
+}
+
+// 📦 讀取各組別、各場次與各工站之原生零件與前置半成品設定 (優先讀取該場次獨立設定，若無則自動繼承組別基準設定)
+function getStationRaw(group, station, viewRound) {
+  try {
+    const all = JSON.parse(localStorage.getItem("ie_chair_group_station_raw") || "{}");
+    const flowKey = getFlowKeyForRound(group, viewRound);
+    if (flowKey && all[flowKey] && all[flowKey][station]) {
+      return all[flowKey][station];
+    }
+    if (group && all[group] && all[group][station]) {
+      return all[group][station];
+    }
+  } catch(e) {}
+  return { hasRaw: false, rawName: "", rawInit: "" };
+}
+
+// 🔒 若網址帶有 ?group=G01 (且未設定 lock=0)，永久鎖定為該組專屬看板模式（即使解鎖管理員依然不可更改組別）
+let urlLockedGroup = null;
+
+window.addEventListener("load", () => {
+  // 🌟 讀取上次記憶之組別 (優先順序: URL 參數 > localStorage > 預設 G02)
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramGroup = (urlParams.get("group") || "").trim().toUpperCase();
+  const paramLock = (urlParams.get("lock") || "").trim();
+  const savedGroup = localStorage.getItem("ie_chair_selected_group");
+  const grpSelect = document.getElementById("groupSelect");
+
+  if (paramGroup && Array.from(grpSelect.options).some(o => o.value === paramGroup)) {
+    grpSelect.value = paramGroup;
+    localStorage.setItem("ie_chair_selected_group", paramGroup);
+    if (paramGroup !== "ALL" && paramLock !== "0") {
+      urlLockedGroup = paramGroup;
+      grpSelect.disabled = true;
+    }
+  } else if (savedGroup && Array.from(grpSelect.options).some(o => o.value === savedGroup)) {
+    grpSelect.value = savedGroup;
+  }
+
+  updateAdminUI();
+  loadAll();
+  startAutoRefresh();
+});
+
+document.getElementById("groupSelect").onchange = function() {
+  // 🛡️ 只要是專屬組別網址，無論是否解鎖管理員，一律禁止切換組別
+  if (urlLockedGroup) {
+    this.value = urlLockedGroup;
+    return;
+  }
+  localStorage.setItem("ie_chair_selected_group", this.value);
+  loadAll();
+};
+document.getElementById("loadBtn").onclick = loadAll;
+
+// ⚡ 跨分頁即時動態同步 (當在 qrcode.html 修改料號或站前可用物料設定時，即時更新螢幕與彈窗)
+window.addEventListener("storage", function(e) {
+  if (e.key === "ie_chair_group_station_raw" || e.key === "ie_chair_group_station_parts" || e.key === "ie_chair_selected_group" || (e.key && e.key.startsWith("ie_chair_flow_backup_"))) {
+    loadAll();
+    const modal = document.getElementById("flowModal");
+    if (modal && modal.style.display !== "none") {
+      const grp = document.getElementById("groupSelect").value;
+      const rawContainer = document.getElementById("modalRawConfigContainer");
+      if (rawContainer) rawContainer.innerHTML = "";
+      refreshModalRawConfigs(grp);
+    }
+  }
+});
+window.addEventListener("focus", function() {
+  loadAll();
+  const modal = document.getElementById("flowModal");
+  if (modal && modal.style.display !== "none") {
+    const grp = document.getElementById("groupSelect").value;
+    const rawContainer = document.getElementById("modalRawConfigContainer");
+    if (rawContainer) rawContainer.innerHTML = "";
+    refreshModalRawConfigs(grp);
+  }
+});
+
+function startAutoRefresh() {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  if (refreshInterval > 0) {
+    autoRefreshTimer = setInterval(loadAll, refreshInterval);
+  }
+}
+
+document.getElementById("refreshIntervalSelect").onchange = function() {
+  refreshInterval = parseInt(this.value, 10);
+  startAutoRefresh();
+  if (refreshInterval === 0) {
+    document.getElementById("status").textContent = "已暫停同步";
+  } else {
+    document.getElementById("status").textContent = `每 ${refreshInterval / 1000} 秒同步中`;
+  }
+};
+
+// 🔐 權限管理系統 (預設為「現場看板唯讀模式」，解鎖後切換為「管理員模式」)
+// 🎯 實作輪次控制 (0: 測試練習 [支援第 1~10 次測試], 1: 正式實作) 與 掃描防呆/完工冷卻秒數
+let currentSystemMode = 0; // 0=TEST, 1=OFFICIAL
+let currentTestRound = parseInt(localStorage.getItem("ie_chair_test_round") || "1", 10) || 1; // 1~10 次測試
+let pendingSelectedTestRound = null; // 暫存使用者於下拉選單剛選擇但尚未按確認的值，防止每 3 秒自動重整將選單跳回第 1 次
+let isSwitchingModeOrRound = false;  // 切換確認進行中鎖定旗標
+let lastLocalModeChangeAt = 0;       // 最近一次本地確認切換時間戳，防止非同步重整舊值覆蓋
+let currentCooldownSec = parseInt(localStorage.getItem("ie_chair_cooldown_sec") || "3", 10) || 3; // 開工防呆 1~5 秒
+let currentFinishCooldownSec = parseInt(localStorage.getItem("ie_chair_finish_cooldown_sec") || "4", 10) || 4; // 完工冷卻/起始間隔 1~5 秒 (預設 4 秒，即 3~5 秒)
+let currentTableFilter = "ALL"; // ALL, OFFICIAL, TEST
+let currentTestRoundFilter = "ALL_TEST"; // ALL_TEST, or "1"~"10"
+
+// 編碼與解碼 SYSTEM_MODE 雲端欄位 (input_wip: 1=正式, 101~110=第1~10次測試; output_wip: 開工防呆*100 + 完工冷卻)
+function encodeSystemModeInput(mode, round) {
+  return mode === 1 ? 1 : (100 + Math.min(10, Math.max(1, parseInt(round, 10) || 1)));
+}
+function decodeSystemModeInput(val) {
+  const n = parseInt(val, 10) || 0;
+  if (n === 1) return { mode: 1, round: currentTestRound };
+  if (n >= 101 && n <= 110) return { mode: 0, round: n - 100 };
+  return { mode: 0, round: 1 };
+}
+function encodeSystemCooldownOutput(startCd, finishCd) {
+  const s = Math.min(5, Math.max(1, parseInt(startCd, 10) || 3));
+  const f = Math.min(5, Math.max(1, parseInt(finishCd, 10) || 4));
+  return s * 100 + f;
+}
+function decodeSystemCooldownOutput(val) {
+  const n = parseInt(val, 10) || 304;
+  if (n >= 100) {
+    const s = Math.min(5, Math.max(1, Math.floor(n / 100)));
+    const f = Math.min(5, Math.max(1, n % 100));
+    return { startCd: s, finishCd: f };
+  }
+  return { startCd: Math.min(5, Math.max(1, n)), finishCd: currentFinishCooldownSec || 4 };
+}
+
+// 判斷 product_id 是否為測試紀錄，以及屬於第幾次測試 (1~10)
+function isTestProductId(pid) {
+  const s = (pid || "").trim().toUpperCase();
+  return s.startsWith("TEST");
+}
+function getTestRoundFromProductId(pid) {
+  const s = (pid || "").trim().toUpperCase();
+  const m = s.match(/^TEST(\d+)-/);
+  if (m) return parseInt(m[1], 10);
+  if (s.startsWith("TEST-")) return 1; // 舊版 TEST-P01 歸為第 1 次測試
+  return null;
+}
+
+function onTestRoundSelectChange(val) {
+  const parsed = parseInt(val, 10);
+  if (!isNaN(parsed) && parsed >= 1 && parsed <= 10) {
+    pendingSelectedTestRound = parsed;
+  }
+}
+
+function updateModeButtonsUI() {
+  const testBtn = document.getElementById("modeTestBtn");
+  const officialBtn = document.getElementById("modeOfficialBtn");
+  const roundSelect = document.getElementById("testRoundSelect");
+  const testRoundBox = document.getElementById("testRoundBox");
+  const readonlyBadge = document.getElementById("readonlyModeBadge");
+  const cdSelect = document.getElementById("systemCooldownSelect");
+  const fcdSelect = document.getElementById("systemFinishCooldownSelect");
+
+  if (cdSelect) cdSelect.value = currentCooldownSec;
+  if (fcdSelect) fcdSelect.value = currentFinishCooldownSec;
+  if (roundSelect && document.activeElement !== roundSelect) {
+    // 若使用者剛在選單選了第 N 次測試準備按確認，保留使用者選中的值，絕不跳回第 1 次
+    const displayRound = (pendingSelectedTestRound !== null) ? pendingSelectedTestRound : currentTestRound;
+    roundSelect.value = String(displayRound);
+  }
+
+  if (currentSystemMode === 1) {
+    if (readonlyBadge) {
+      readonlyBadge.innerHTML = `🔒 🏆 正式實作 (評分)｜代碼: P01... (僅管理員可調)`;
+      readonlyBadge.style.background = "#dcfce7";
+      readonlyBadge.style.color = "#15803d";
+      readonlyBadge.style.borderColor = "#86efac";
+    }
+    if (officialBtn) {
+      officialBtn.style.background = "#dcfce7";
+      officialBtn.style.color = "#15803d";
+      officialBtn.style.borderColor = "#86efac";
+    }
+    if (testBtn) {
+      testBtn.style.background = "#fff";
+      testBtn.style.color = "#64748b";
+      testBtn.style.borderColor = "#cbd5e1";
+      testBtn.textContent = `🧪 測試練習`;
+    }
+    if (testRoundBox) testRoundBox.style.opacity = "0.65";
+  } else {
+    if (readonlyBadge) {
+      readonlyBadge.innerHTML = `🔒 🧪 第 ${currentTestRound} 次測試｜代碼: TEST${currentTestRound}-P01... (僅管理員可調)`;
+      readonlyBadge.style.background = "#f3e8ff";
+      readonlyBadge.style.color = "#7e22ce";
+      readonlyBadge.style.borderColor = "#d8b4fe";
+    }
+    if (testBtn) {
+      testBtn.style.background = "#eff6ff";
+      testBtn.style.color = "#1d4ed8";
+      testBtn.style.borderColor = "#93c5fd";
+      testBtn.textContent = `🧪 測試練習 (目前：第 ${currentTestRound} 次)`;
+    }
+    if (officialBtn) {
+      officialBtn.style.background = "#fff";
+      officialBtn.style.color = "#64748b";
+      officialBtn.style.borderColor = "#cbd5e1";
+    }
+    if (testRoundBox) testRoundBox.style.opacity = "1";
+  }
+}
+
+// 雲端 SYSTEM_MODE 安全寫入 (若尚無 SYSTEM_MODE 紀錄則自動新增，確保跨裝置 100% 同步)
+async function upsertSystemModeCloud(modeVal, roundVal, startCdVal, finishCdVal) {
+  try {
+    const inVal = encodeSystemModeInput(modeVal, roundVal);
+    const outVal = encodeSystemCooldownOutput(startCdVal, finishCdVal);
+    const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/station_wip?station_id=eq.SYSTEM_MODE&select=id`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+    });
+    const existing = await checkRes.json();
+    if (existing && existing.length > 0) {
+      await fetch(`${SUPABASE_URL}/rest/v1/station_wip?station_id=eq.SYSTEM_MODE`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ group_id: "SYSTEM", input_wip: inVal, output_wip: outVal, updated_at: new Date().toISOString() })
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/station_wip`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ group_id: "SYSTEM", station_id: "SYSTEM_MODE", input_wip: inVal, output_wip: outVal })
+      });
+    }
+  } catch (e) {}
+}
+
+// 重置指定組別的 station_wip 在製品庫存 (回到該場次初始設定備料 subInit / rawInit，保留歷史 event 數據，且排除 SYSTEM_MODE)
+async function resetGroupWipForNewRound(group, viewRound) {
+  if (!group || group === "ALL") return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=neq.SYSTEM_MODE`, {
+      method: "PATCH",
+      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ input_wip: 0, output_wip: 0, updated_at: new Date().toISOString() })
+    });
+    const allRaw = JSON.parse(localStorage.getItem("ie_chair_group_station_raw") || "{}");
+    const flowKey = getFlowKeyForRound(group, viewRound);
+    const groupRaw = (flowKey && allRaw[flowKey]) ? allRaw[flowKey] : (allRaw[group] || {});
+    for (const [stKey, cfg] of Object.entries(groupRaw)) {
+      if (!cfg) continue;
+      const initSub = (!cfg.isRoot && cfg.subInit !== undefined && cfg.subInit !== null)
+        ? Math.max(0, parseInt(cfg.subInit, 10) || 0)
+        : 0;
+      await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=eq.${encodeURIComponent(stKey)}`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ input_wip: initSub, output_wip: 0, updated_at: new Date().toISOString() })
+      });
+      if (cfg.hasRaw) {
+        const initRaw = Math.max(0, parseInt(cfg.rawInit, 10) || 0);
+        await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=eq.${encodeURIComponent(stKey + "_RAW")}`, {
+          method: "PATCH",
+          headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ input_wip: initRaw, output_wip: 0, updated_at: new Date().toISOString() })
+        });
+      }
+    }
+  } catch (e) {}
+}
+
+// 管理員專屬：選擇第 1~10 次測試並點擊「✅ 確認」
+async function confirmTestRound() {
+  if (!isAdminLoggedIn) {
+    alert("⚠️ 權限不足：「第幾次測試」僅限管理員調整！\n請先點擊「🔒 現場看板模式 (點擊解鎖管理)」輸入管理員密碼。");
+    updateModeButtonsUI();
+    return;
+  }
+  resetAutoLock();
+
+  const roundSelect = document.getElementById("testRoundSelect");
+  const rawVal = (pendingSelectedTestRound !== null)
+    ? pendingSelectedTestRound
+    : (roundSelect ? parseInt(roundSelect.value, 10) : currentTestRound);
+  const selectedRound = Math.min(10, Math.max(1, rawVal || 1));
+  if (roundSelect) roundSelect.value = String(selectedRound);
+  const group = document.getElementById("groupSelect").value;
+
+  isSwitchingModeOrRound = true;
+  try {
+    const ok = confirm(`🧪 確定要切換並確認為【第 ${selectedRound} 次測試】嗎？\n\n• 確認後，各工站手機與 QR Code 頁面將同步切換至「第 ${selectedRound} 次測試 (TEST${selectedRound}-P01...)」。\n• 本組在製品庫存將自動歸零並恢復初始備料，讓第 ${selectedRound} 次測試從 0 開始計時（先前各次測試的歷史紀錄均完整保留）！`);
+    if (!ok) {
+      pendingSelectedTestRound = null;
+      if (roundSelect) roundSelect.value = String(currentTestRound);
+      return;
+    }
+
+    currentSystemMode = 0;
+    currentTestRound = selectedRound;
+    pendingSelectedTestRound = null;
+    lastLocalModeChangeAt = Date.now();
+    localStorage.setItem("ie_chair_system_mode", "0");
+    localStorage.setItem("ie_chair_test_round", String(selectedRound));
+    if (roundSelect) roundSelect.value = String(selectedRound);
+    updateModeButtonsUI();
+
+    // 1. 先立即寫入雲端 SYSTEM_MODE，確保 selectedRound 不會被背景輪詢覆蓋
+    await upsertSystemModeCloud(0, selectedRound, currentCooldownSec, currentFinishCooldownSec);
+
+    // 2. 重置該組別的工站在製品庫存（排除 SYSTEM_MODE）
+    if (group !== "ALL") {
+      await resetGroupWipForNewRound(group);
+    }
+
+    // 3. 再次確保雲端 SYSTEM_MODE 鎖定為 selectedRound
+    await upsertSystemModeCloud(0, selectedRound, currentCooldownSec, currentFinishCooldownSec);
+    lastLocalModeChangeAt = Date.now();
+
+    // 自動將下方表格篩選與流程圖檢視切至該次測試，方便即時確認該次測試資料
+    const filterSelect = document.getElementById("filterTestRoundSelect");
+    if (filterSelect) {
+      filterSelect.value = String(selectedRound);
+      setTestRoundTableFilter(String(selectedRound));
+    }
+
+    alert(`✓ 已確認切換為【🧪 第 ${selectedRound} 次測試】！各工站手機與在製品庫存已同步就緒。`);
+  } finally {
+    isSwitchingModeOrRound = false;
+  }
+  loadAll();
+}
+
+async function changeSystemMode(newMode) {
+  if (!isAdminLoggedIn) {
+    alert("⚠️ 權限不足：切換實作模式或調整第幾次測試需管理員權限！\n請先點擊「🔒 現場看板模式 (點擊解鎖管理)」輸入管理員密碼。");
+    return;
+  }
+  resetAutoLock();
+
+  const group = document.getElementById("groupSelect").value;
+  isSwitchingModeOrRound = true;
+  try {
+    if (newMode === 1) {
+      const ok = confirm("⚠️ 即將切換至【🏆 正式實作評分模式】！\n\n現場各工站手機將同步切入正式計分實作。\n建議點擊「確定」自動將當前在製品庫存歸零並恢復初始備料起跑（測試數據將完整保留，不受影響）；點擊「取消」保留目前在庫。");
+      if (ok && group !== "ALL") {
+        await resetGroupWipForNewRound(group);
+      }
+    } else {
+      const roundSelect = document.getElementById("testRoundSelect");
+      const rawVal = (pendingSelectedTestRound !== null)
+        ? pendingSelectedTestRound
+        : (roundSelect ? parseInt(roundSelect.value, 10) : currentTestRound);
+      currentTestRound = Math.min(10, Math.max(1, rawVal || currentTestRound));
+      pendingSelectedTestRound = null;
+    }
+
+    currentSystemMode = newMode;
+    lastLocalModeChangeAt = Date.now();
+    localStorage.setItem("ie_chair_system_mode", newMode);
+    localStorage.setItem("ie_chair_test_round", String(currentTestRound));
+    updateModeButtonsUI();
+
+    // 同步更新雲端 station_wip SYSTEM_MODE
+    await upsertSystemModeCloud(newMode, currentTestRound, currentCooldownSec, currentFinishCooldownSec);
+    lastLocalModeChangeAt = Date.now();
+
+    alert(`✓ 已成功切換為【${newMode === 1 ? '🏆 正式實作 (評分)' : `🧪 測試練習 (第 ${currentTestRound} 次測試)`}】！現場手機端已同步。`);
+  } finally {
+    isSwitchingModeOrRound = false;
+  }
+  loadAll();
+}
+
+// 管理員專屬：修改開工防呆秒數與完工冷卻/起始間隔秒數
+async function changeSystemCooldown() {
+  if (!isAdminLoggedIn) {
+    alert("⚠️ 權限不足：防呆與冷卻時間僅限管理員修改！");
+    updateModeButtonsUI();
+    return;
+  }
+  resetAutoLock();
+
+  const cdSelect = document.getElementById("systemCooldownSelect");
+  const fcdSelect = document.getElementById("systemFinishCooldownSelect");
+  currentCooldownSec = Math.min(5, Math.max(1, parseInt(cdSelect ? cdSelect.value : "3", 10) || 3));
+  currentFinishCooldownSec = Math.min(5, Math.max(1, parseInt(fcdSelect ? fcdSelect.value : "4", 10) || 4));
+
+  localStorage.setItem("ie_chair_cooldown_sec", String(currentCooldownSec));
+  localStorage.setItem("ie_chair_finish_cooldown_sec", String(currentFinishCooldownSec));
+
+  await upsertSystemModeCloud(currentSystemMode, currentTestRound, currentCooldownSec, currentFinishCooldownSec);
+}
+
+// 取得目前看板（流程圖 + 統計摘要）正在檢視的單一場次設定，確保各場次流程圖與成績完全獨立互不影響
+function getEffectiveViewRound() {
+  if (currentTableFilter === "OFFICIAL") {
+    return {
+      mode: "OFFICIAL",
+      round: null,
+      label: "🏆 正式實作 (評分)",
+      isLive: currentSystemMode === 1
+    };
+  }
+  if (currentTableFilter === "TEST" && currentTestRoundFilter !== "ALL_TEST") {
+    const r = parseInt(currentTestRoundFilter, 10) || 1;
+    return {
+      mode: "TEST",
+      round: r,
+      label: `🧪 第 ${r} 次測試`,
+      isLive: (currentSystemMode === 0 && currentTestRound === r)
+    };
+  }
+  // 預設（AUTO）：自動鎖定當前系統進行中的場次，確保切換至第 2 次測試時不會混入第 1 次測試的成績
+  if (currentSystemMode === 1) {
+    return {
+      mode: "OFFICIAL",
+      round: null,
+      label: "🏆 正式實作 (評分)",
+      isLive: true
+    };
+  }
+  return {
+    mode: "TEST",
+    round: currentTestRound,
+    label: `🧪 第 ${currentTestRound} 次測試`,
+    isLive: true
+  };
+}
+
+function isEventInViewRound(r, viewRound) {
+  if (!r || r.status !== "COMPLETED") return false;
+  const isT = isTestProductId(r.product_id);
+  if (viewRound.mode === "OFFICIAL") return !isT;
+  if (!isT) return false;
+  const rRound = getTestRoundFromProductId(r.product_id) || 1;
+  return rRound === viewRound.round;
+}
+
+// 判斷任何狀態 (包含 WORKING / COMPLETED) 的紀錄是否屬於指定場次 (供精準單場次刪除使用)
+function isEventInTargetRoundAllStatus(r, viewRound) {
+  if (!r) return false;
+  const isT = isTestProductId(r.product_id);
+  if (viewRound.mode === "OFFICIAL") return !isT;
+  if (!isT) return false;
+  const rRound = getTestRoundFromProductId(r.product_id) || 1;
+  return rRound === viewRound.round;
+}
+
+// 🗑️ 精準刪除「指定組別 + 指定單一場次 (如第 2 次測試)」的 event 紀錄，絕不誤刪其他測試場次與別組數據
+async function deleteGroupRoundEvents(group, viewRound) {
+  if (!group || group === "ALL") return;
+  const vr = viewRound || getEffectiveViewRound();
+
+  // 1. 先從目前記憶體中的紀錄篩出屬於該組、該場次的明確 UUID 並刪除
+  const targetIds = (Array.isArray(currentEvents) ? currentEvents : [])
+    .filter(r => (r.group_id || "").trim() === group && isEventInTargetRoundAllStatus(r, vr))
+    .map(r => r.id)
+    .filter(Boolean);
+
+  if (targetIds.length > 0) {
+    await fetch(`${SUPABASE_URL}/rest/v1/event?id=in.(${targetIds.join(",")})`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+    });
+  }
+
+  // 2. 再以 PostgREST 條件向雲端精準刪除該組該場次的紀錄，100% 保留其他場次數據
+  if (vr.mode === "OFFICIAL") {
+    await fetch(`${SUPABASE_URL}/rest/v1/event?group_id=eq.${encodeURIComponent(group)}&product_id=not.ilike.TEST*`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+    });
+  } else {
+    const rNum = Math.min(10, Math.max(1, parseInt(vr.round, 10) || 1));
+    if (rNum === 1) {
+      await fetch(`${SUPABASE_URL}/rest/v1/event?group_id=eq.${encodeURIComponent(group)}&or=(product_id.ilike.TEST1-*,product_id.ilike.TEST-*)`, {
+        method: "DELETE",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/event?group_id=eq.${encodeURIComponent(group)}&product_id=ilike.TEST${rNum}-*`, {
+        method: "DELETE",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+      });
+    }
+  }
+}
+
+function updateFlowViewRoundUI() {
+  const flowSel = document.getElementById("flowViewRoundSelect");
+  const statusTag = document.getElementById("flowViewRoundStatusTag");
+  const viewRound = getEffectiveViewRound();
+
+  if (flowSel) {
+    if (currentTableFilter === "OFFICIAL") {
+      flowSel.value = "OFFICIAL";
+    } else if (currentTableFilter === "TEST" && currentTestRoundFilter !== "ALL_TEST") {
+      flowSel.value = String(currentTestRoundFilter);
+    } else {
+      flowSel.value = "AUTO";
+    }
+  }
+
+  if (statusTag) {
+    if (viewRound.isLive) {
+      statusTag.textContent = `🟢 目前進行中：${viewRound.label}`;
+      statusTag.style.background = "#dcfce7";
+      statusTag.style.color = "#15803d";
+    } else {
+      statusTag.textContent = `📁 歷史封存成績：${viewRound.label}（不受後續場次影響）`;
+      statusTag.style.background = "#fef3c7";
+      statusTag.style.color = "#b45309";
+    }
+  }
+
+  // 動態更新「自訂工站順序」與「清空紀錄」按鈕文字，清楚標示目前作用的單一場次
+  const openFlowBtn = document.getElementById("openFlowEditorBtn");
+  if (openFlowBtn) {
+    openFlowBtn.textContent = `🛠️ 自訂本組【${viewRound.label}】流程圖`;
+  }
+  const editCardBtn = document.getElementById("editFlowInCardBtn");
+  if (editCardBtn) {
+    editCardBtn.textContent = `✏️ 修改【${viewRound.label}】順序圖`;
+  }
+  const delBtn = document.getElementById("deleteAllBtn");
+  if (delBtn) {
+    delBtn.textContent = `🗑️ 清空本組【${viewRound.label}】紀錄與庫存`;
+  }
+  const delGroupBtn = document.getElementById("deleteEntireGroupBtn");
+  if (delGroupBtn) {
+    const grp = urlLockedGroup || (document.getElementById("groupSelect") ? document.getElementById("groupSelect").value : "");
+    const grpLabel = (!grp || grp === "ALL") ? "本組" : `【${grp}】`;
+    delGroupBtn.textContent = `💥 刪除${grpLabel}全部場次數據`;
+  }
+}
+
+function onFlowViewRoundChange(val) {
+  if (val === "AUTO") {
+    setTableFilter("ALL");
+  } else if (val === "OFFICIAL") {
+    setTableFilter("OFFICIAL");
+  } else {
+    const sel = document.getElementById("filterTestRoundSelect");
+    if (sel) sel.value = String(val);
+    setTestRoundTableFilter(String(val));
+  }
+}
+
+function setTableFilter(filter) {
+  currentTableFilter = filter;
+  if (filter !== "TEST") {
+    const sel = document.getElementById("filterTestRoundSelect");
+    if (sel) sel.value = "ALL_TEST";
+    currentTestRoundFilter = "ALL_TEST";
+  }
+  const btns = {
+    ALL: document.getElementById("filterAllBtn"),
+    OFFICIAL: document.getElementById("filterOfficialBtn"),
+    TEST: document.getElementById("filterTestBtn")
+  };
+  Object.keys(btns).forEach(k => {
+    if (!btns[k]) return;
+    if (k === filter) {
+      btns[k].style.background = k === 'OFFICIAL' ? '#dcfce7' : k === 'TEST' ? '#f3e8ff' : '#eff6ff';
+      btns[k].style.color = k === 'OFFICIAL' ? '#15803d' : k === 'TEST' ? '#7e22ce' : '#1d4ed8';
+      btns[k].style.borderColor = k === 'OFFICIAL' ? '#86efac' : k === 'TEST' ? '#d8b4fe' : '#93c5fd';
+    } else {
+      btns[k].style.background = "#fff";
+      btns[k].style.color = "#64748b";
+      btns[k].style.borderColor = "#cbd5e1";
+    }
+  });
+  updateFlowViewRoundUI();
+  showTable(currentEvents);
+  showStats(currentEvents);
+  const group = document.getElementById("groupSelect").value;
+  if (group !== "ALL") {
+    renderFlowDiagram(group);
+  }
+}
+
+function setTestRoundTableFilter(val) {
+  currentTestRoundFilter = val || "ALL_TEST";
+  if (currentTestRoundFilter !== "ALL_TEST") {
+    currentTableFilter = "TEST";
+    const btns = {
+      ALL: document.getElementById("filterAllBtn"),
+      OFFICIAL: document.getElementById("filterOfficialBtn"),
+      TEST: document.getElementById("filterTestBtn")
+    };
+    Object.keys(btns).forEach(k => {
+      if (!btns[k]) return;
+      if (k === "TEST") {
+        btns[k].style.background = '#f3e8ff';
+        btns[k].style.color = '#7e22ce';
+        btns[k].style.borderColor = '#d8b4fe';
+      } else {
+        btns[k].style.background = "#fff";
+        btns[k].style.color = "#64748b";
+        btns[k].style.borderColor = "#cbd5e1";
+      }
+    });
+  }
+  updateFlowViewRoundUI();
+  showTable(currentEvents);
+  showStats(currentEvents);
+  const group = document.getElementById("groupSelect").value;
+  if (group !== "ALL") {
+    renderFlowDiagram(group);
+  }
+}
+
+const ADMIN_PIN_KEY = "ie_chair_admin_pin";
+const DEFAULT_PIN = "1688";
+let isAdminLoggedIn = false;
+let autoLockTimer = null;
+
+function getAdminPin() {
+  return localStorage.getItem(ADMIN_PIN_KEY) || DEFAULT_PIN;
+}
+
+function bindCurrentGroupUrl() {
+  const grpSelect = document.getElementById("groupSelect");
+  const grp = grpSelect ? grpSelect.value : "G01";
+  if (!grp || grp === "ALL") {
+    alert("請先選擇單一組別（如 G01 ~ G20）再執行組別鎖定！");
+    return;
+  }
+  urlLockedGroup = grp;
+  if (grpSelect) grpSelect.disabled = true;
+  localStorage.setItem("ie_chair_selected_group", grp);
+  try {
+    const newUrl = `${window.location.pathname}?group=${encodeURIComponent(grp)}&lock=1`;
+    window.history.replaceState({}, "", newUrl);
+  } catch (e) {}
+  updateAdminUI();
+  loadAll();
+  alert(`🔒 已將此頁面與網址永久綁定為【${grp}】專屬看板！\n\n綁定後即使解鎖管理員權限，依然無法切換至其他組別，徹底防止誤改或誤刪別組資料。`);
+}
+
+function updateAdminUI() {
+  const adminToggleBtn = document.getElementById("adminToggleBtn");
+  const adminCooldownBox = document.getElementById("adminCooldownBox");
+  const readonlyModeBadge = document.getElementById("readonlyModeBadge");
+  const adminModeControls = document.getElementById("adminModeControls");
+  const groupLinksModalBtn = document.getElementById("groupLinksModalBtn");
+  const changePinBtn = document.getElementById("changePinBtn");
+  const openFlowEditorBtn = document.getElementById("openFlowEditorBtn");
+  const deleteAllBtn = document.getElementById("deleteAllBtn");
+  const deleteEntireGroupBtn = document.getElementById("deleteEntireGroupBtn");
+  const editFlowInCardBtn = document.getElementById("editFlowInCardBtn");
+  const grpSelect = document.getElementById("groupSelect");
+  const bindGrpBtn = document.getElementById("bindGroupUrlBtn");
+  const lockedGrpBadge = document.getElementById("lockedGroupBadge");
+  const lockedGrpText = document.getElementById("lockedGroupText");
+  const adminTh = document.querySelector("#dataTable thead th.admin-only");
+  const adminTds = document.querySelectorAll("#dataTable tbody td.admin-only");
+
+  // 🛡️ 無論是否解鎖管理員，只要處於組別綁定模式 (urlLockedGroup)，一律強制鎖死組別不可更改！
+  if (urlLockedGroup) {
+    if (grpSelect) {
+      grpSelect.value = urlLockedGroup;
+      grpSelect.disabled = true;
+      grpSelect.style.display = "none";
+    }
+    if (bindGrpBtn) bindGrpBtn.style.display = "none";
+    if (lockedGrpText) lockedGrpText.textContent = urlLockedGroup;
+    if (lockedGrpBadge) lockedGrpBadge.style.display = "inline-flex";
+  } else {
+    if (grpSelect) {
+      grpSelect.disabled = false;
+      grpSelect.style.display = "inline-block";
+    }
+    if (bindGrpBtn) bindGrpBtn.style.display = "inline-flex";
+    if (lockedGrpBadge) lockedGrpBadge.style.display = "none";
+  }
+
+  if (isAdminLoggedIn) {
+    if (adminToggleBtn) {
+      adminToggleBtn.innerHTML = "🔓 管理員已授權 (點擊鎖定)";
+      adminToggleBtn.style.background = "#eff6ff";
+      adminToggleBtn.style.color = "#1d4ed8";
+      adminToggleBtn.style.borderColor = "#93c5fd";
+    }
+    if (readonlyModeBadge) readonlyModeBadge.style.display = "none";
+    if (adminModeControls) adminModeControls.style.display = "inline-flex";
+    if (adminCooldownBox) adminCooldownBox.style.display = "inline-flex";
+    if (groupLinksModalBtn) groupLinksModalBtn.style.display = urlLockedGroup ? "none" : "inline-flex";
+    if (changePinBtn) changePinBtn.style.display = urlLockedGroup ? "none" : "inline-flex";
+    if (openFlowEditorBtn) openFlowEditorBtn.style.display = "inline-flex";
+    if (deleteAllBtn) deleteAllBtn.style.display = "inline-flex";
+    if (deleteEntireGroupBtn) deleteEntireGroupBtn.style.display = "inline-flex";
+    if (editFlowInCardBtn) editFlowInCardBtn.style.display = "inline-flex";
+    if (adminTh) adminTh.style.display = "";
+    adminTds.forEach(td => td.style.display = "");
+  } else {
+    if (adminToggleBtn) {
+      adminToggleBtn.innerHTML = "🔒 現場看板模式 (點擊解鎖管理)";
+      adminToggleBtn.style.background = "#f8fafc";
+      adminToggleBtn.style.color = "#334155";
+      adminToggleBtn.style.borderColor = "#cbd5e1";
+    }
+    if (readonlyModeBadge) readonlyModeBadge.style.display = "inline-flex";
+    if (adminModeControls) adminModeControls.style.display = "none";
+    if (adminCooldownBox) adminCooldownBox.style.display = "none";
+    if (groupLinksModalBtn) groupLinksModalBtn.style.display = "none";
+    if (changePinBtn) changePinBtn.style.display = "none";
+    if (openFlowEditorBtn) openFlowEditorBtn.style.display = "none";
+    if (deleteAllBtn) deleteAllBtn.style.display = "none";
+    if (deleteEntireGroupBtn) deleteEntireGroupBtn.style.display = "none";
+    if (editFlowInCardBtn) editFlowInCardBtn.style.display = "none";
+    if (adminTh) adminTh.style.display = "none";
+    adminTds.forEach(td => td.style.display = "none");
+  }
+  updateModeButtonsUI();
+}
+
+function getSiteDirBaseUrl() {
+  try {
+    const loc = window.location.href.split("?")[0].split("#")[0];
+    if (loc.startsWith("http://") || loc.startsWith("https://")) {
+      return loc.substring(0, loc.lastIndexOf("/") + 1);
+    }
+  } catch (e) {}
+  return "https://mrjohnny461-png.github.io/qr/";
+}
+
+function openGroupLinksModal() {
+  const modal = document.getElementById("groupLinksModal");
+  const container = document.getElementById("groupLinksListContainer");
+  const baseHint = document.getElementById("currentSiteBaseHint");
+  if (!modal || !container) return;
+
+  const baseDir = getSiteDirBaseUrl();
+  if (baseHint) {
+    baseHint.innerHTML = `🌐 目前網站根目錄：<code>${baseDir}</code>`;
+  }
+  container.innerHTML = "";
+  for (let i = 1; i <= 20; i++) {
+    const g = `G${String(i).padStart(2, "0")}`;
+    const screenUrl = `${baseDir}工蓋螢幕.html?group=${g}&lock=1`;
+    const qrUrl = `${baseDir}qrcode.html?group=${g}&lock=1`;
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; flex-wrap:wrap; font-size:13px;";
+    row.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:260px;">
+        <span style="font-weight:800; color:#1d4ed8; background:#eff6ff; padding:3px 8px; border-radius:6px; border:1px solid #bfdbfe;">${g}</span>
+        <input type="text" readonly value="${screenUrl}" style="flex:1; padding:4px 8px; font-size:12px; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#334155;" onclick="this.select()">
+      </div>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <button type="button" onclick="navigator.clipboard.writeText('${screenUrl}').then(() => alert('✓ 已複製【${g}】專屬工蓋螢幕網址！'))" style="padding:4px 10px; font-size:12px; font-weight:bold; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer;">📋 複製看板網址</button>
+        <a href="${qrUrl}" target="_blank" style="padding:4px 10px; font-size:12px; font-weight:bold; background:#eff6ff; color:#0284c7; border:1px solid #bae6fd; border-radius:6px; text-decoration:none;">🖨️ ${g} QR頁 ❯</a>
+      </div>
+    `;
+    container.appendChild(row);
+  }
+  modal.style.display = "block";
+}
+
+function closeGroupLinksModal() {
+  const modal = document.getElementById("groupLinksModal");
+  if (modal) modal.style.display = "none";
+}
+
+function copyAllGroupLinks() {
+  const baseDir = getSiteDirBaseUrl();
+  const lines = ["【IE Chair 各組專屬工蓋螢幕監控網址 (內附前往該組 QR Code 連結)】"];
+  for (let i = 1; i <= 20; i++) {
+    const g = `G${String(i).padStart(2, "0")}`;
+    lines.push(`${g} 專屬看板：${baseDir}工蓋螢幕.html?group=${g}&lock=1`);
+  }
+  const text = lines.join("\n");
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      alert("✓ 已複製 G01 ~ G20 全部 20 組專屬網址清單！可直接貼上至 Line 群組或教學平台。");
+    });
+  }
+}
+
+function resetAutoLock() {
+  if (autoLockTimer) clearTimeout(autoLockTimer);
+  if (isAdminLoggedIn) {
+    // 15 分鐘無操作自動鎖定為現場看板唯讀模式
+    autoLockTimer = setTimeout(() => {
+      lockAdmin();
+      alert("⏱️ 管理員已閒置超過 15 分鐘，已自動切換回【現場看板唯讀模式】！");
+    }, 15 * 60 * 1000);
+  }
+}
+
+function unlockAdmin() {
+  const pin = prompt("🔐 請輸入管理員密碼（預設密碼為 1688）：");
+  if (pin === null) return;
+  if (pin.trim() === getAdminPin()) {
+    isAdminLoggedIn = true;
+    updateAdminUI();
+    resetAutoLock();
+    alert("✓ 管理員權限已解鎖！現已開放工站流程順序自訂、紀錄刪除與重置功能。");
+  } else {
+    alert("❌ 密碼錯誤，存取已被拒絕！");
+  }
+}
+
+function lockAdmin() {
+  isAdminLoggedIn = false;
+  if (autoLockTimer) clearTimeout(autoLockTimer);
+  updateAdminUI();
+}
+
+function toggleAdmin() {
+  if (isAdminLoggedIn) {
+    lockAdmin();
+  } else {
+    unlockAdmin();
+  }
+}
+
+function changeAdminPin() {
+  if (!isAdminLoggedIn) {
+    alert("請先解鎖管理員模式！");
+    return;
+  }
+  const oldPin = prompt("請輸入目前的管理員密碼：");
+  if (oldPin === null) return;
+  if (oldPin.trim() !== getAdminPin()) {
+    alert("❌ 舊密碼不正確！");
+    return;
+  }
+  const newPin = prompt("請輸入新的管理員密碼 (至少 4 碼)：");
+  if (!newPin || newPin.trim().length < 4) {
+    alert("密碼長度至少需 4 碼！");
+    return;
+  }
+  const confirmPin = prompt("請再次確認輸入新的管理員密碼：");
+  if (newPin.trim() !== (confirmPin ? confirmPin.trim() : "")) {
+    alert("兩次輸入的密碼不一致！");
+    return;
+  }
+  localStorage.setItem(ADMIN_PIN_KEY, newPin.trim());
+  alert("✓ 管理員密碼修改成功！新密碼已生效，請妥善保存。");
+}
+
+// 🗑️ 單一場次精準清空與重置 WIP (僅刪除該組、該次測試/場次的數據，其他場次數據 100% 保留)
+document.getElementById("deleteAllBtn").onclick = async () => {
+  if (!isAdminLoggedIn) {
+    alert("⚠️ 權限不足：現場看板模式下禁止執行清空重置操作！請先解鎖管理員。");
+    return;
+  }
+  resetAutoLock();
+
+  const group = document.getElementById("groupSelect").value;
+  if (group === "ALL") {
+    alert("請先選擇特定的單一組別（例如 G02）再執行清空！");
+    return;
+  }
+
+  const viewRound = getEffectiveViewRound();
+  const ok = confirm(`⚠️ 確定要清空【${group}】在【${viewRound.label}】的所有計時紀錄，並將本組工站庫存歸零重置嗎？\n\n💡 系統保護：本次操作「只會刪除 ${group} 於 ${viewRound.label}」的數據，其他測試場次（如第 1~10 次測試的其他場次）與別組的歷史數據均 100% 完整保留！`);
+  if (!ok) return;
+
+  try {
+    document.getElementById("status").textContent = `正在清空【${group} - ${viewRound.label}】與重置中...`;
+
+    // 1. 精準刪除該組、該場次的 event 紀錄（絕不呼叫會清空全組所有場次的舊 RPC）
+    await deleteGroupRoundEvents(group, viewRound);
+
+    // 2. 重置該組的 station_wip 在製品庫存（回到該場次設定之初始備料，並排除 SYSTEM_MODE）
+    await resetGroupWipForNewRound(group, viewRound);
+
+    // 3. 確保清空重置不會把 SYSTEM_MODE 的測試次數洗掉
+    await upsertSystemModeCloud(currentSystemMode, currentTestRound, currentCooldownSec, currentFinishCooldownSec);
+
+    alert(`✓ 【${group}】在【${viewRound.label}】的生產紀錄已清空，庫存已歸零重置！（其他測試場次的數據均完整保留）`);
+    loadAll();
+  } catch (err) {
+    alert("清空重置失敗：" + err.message);
+  }
+};
+
+// 💥 徹底刪除該組別「全部場次 (第 1~10 次測試 + 正式實作)」的所有計時紀錄與重置 WIP
+document.getElementById("deleteEntireGroupBtn").onclick = async () => {
+  if (!isAdminLoggedIn) {
+    alert("⚠️ 權限不足：現場看板模式下禁止執行刪除操作！請先解鎖管理員。");
+    return;
+  }
+  resetAutoLock();
+
+  const group = urlLockedGroup || document.getElementById("groupSelect").value;
+  if (!group || group === "ALL") {
+    alert("請先選擇特定的單一組別（例如 G01 ~ G20）再執行整組刪除！");
+    return;
+  }
+
+  const ok = confirm(`🚨 確定要徹底刪除【${group}】在「所有測試場次 (第 1~10 次測試) 與正式實作」的全部計時紀錄，並將本組工站庫存歸零重置嗎？\n\n⚠️ 注意：此操作會將【${group}】的所有場次歷史紀錄一次清空，但不會影響其他組別！`);
+  if (!ok) return;
+
+  try {
+    document.getElementById("status").textContent = `正在徹底刪除【${group}】全部場次數據中...`;
+
+    // 1. 先從目前記憶體中的 currentEvents 找出屬於該組的所有紀錄 ID 並精準刪除
+    const targetIds = (currentEvents || [])
+      .filter(r => r && r.group_id === group && r.id)
+      .map(r => r.id);
+    if (targetIds.length > 0) {
+      await fetch(`${SUPABASE_URL}/rest/v1/event?id=in.(${targetIds.join(",")})`, {
+        method: "DELETE",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+      });
+    }
+
+    // 2. 再向雲端直接刪除 group_id 等於該組的所有 event 紀錄（涵蓋第 1~10 次測試與正式實作）
+    await fetch(`${SUPABASE_URL}/rest/v1/event?group_id=eq.${encodeURIComponent(group)}`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+    });
+
+    // 3. 重置該組的 station_wip 在製品庫存（回到目前檢視場次設定之初始備料，並排除 SYSTEM_MODE）
+    const viewRound = getEffectiveViewRound();
+    await resetGroupWipForNewRound(group, viewRound);
+
+    // 4. 確保刪除不會把 SYSTEM_MODE 的全線測試次數洗掉
+    await upsertSystemModeCloud(currentSystemMode, currentTestRound, currentCooldownSec, currentFinishCooldownSec);
+
+    alert(`✓ 已徹底清空【${group}】所有測試場次與正式實作的全部計時數據，並將庫存歸零重置！`);
+    loadAll();
+  } catch (err) {
+    alert("刪除整組數據失敗：" + err.message);
+  }
+};
+
+// 🧭 讀取並解析指定組別與場次的專屬流程圖 (支援 G01-T1 ~ G01-T10, G01-OFFICIAL 各自獨立，若新場次尚未自訂則自動繼承前一場次或基準流程)
+async function fetchAndResolveFlowsForRound(group, viewRound) {
+  window.cachedGroupFlows = window.cachedGroupFlows || {};
+  const vr = viewRound || getEffectiveViewRound();
+  const flowKey = getFlowKeyForRound(group, vr);
+
+  let allGroupRows = [];
+  try {
+    const flowRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/station_flow?or=(group_id.eq.${encodeURIComponent(group)},group_id.like.${encodeURIComponent(group)}-*)&order=station_id.asc`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY } }
+    );
+    const json = await flowRes.json();
+    if (Array.isArray(json)) {
+      allGroupRows = json;
+    }
+  } catch (e) {}
+
+  // 依 group_id 分類快取 (例如 G01, G01-T1, G01-T2, ..., G01-OFFICIAL)
+  const byKey = {};
+  allGroupRows.forEach(row => {
+    const k = (row.group_id || "").trim();
+    if (!k) return;
+    if (!byKey[k]) byKey[k] = [];
+    byKey[k].push(row);
+  });
+  Object.keys(byKey).forEach(k => {
+    window.cachedGroupFlows[k] = byKey[k];
+  });
+
+  // 候選查找順序：1. 該場次專屬 flowKey -> 2. 前序測試場次 -> 3. 組別基準 group
+  const candidateKeys = [flowKey];
+  if (vr.mode === "TEST" && vr.round > 1) {
+    for (let r = vr.round - 1; r >= 1; r--) {
+      candidateKeys.push(`${group}-T${r}`);
+    }
+  } else if (vr.mode === "OFFICIAL") {
+    for (let r = currentTestRound; r >= 1; r--) {
+      candidateKeys.push(`${group}-T${r}`);
+    }
+  }
+  if (!candidateKeys.includes(group)) {
+    candidateKeys.push(group);
+  }
+
+  for (const key of candidateKeys) {
+    if (byKey[key] && byKey[key].length > 0) {
+      window.cachedGroupFlows[flowKey] = byKey[key];
+      return byKey[key];
+    }
+    const localRaw = localStorage.getItem(`ie_chair_flow_backup_${key}`);
+    if (localRaw) {
+      try {
+        const localFlows = JSON.parse(localRaw);
+        if (Array.isArray(localFlows) && localFlows.length > 0) {
+          window.cachedGroupFlows[flowKey] = localFlows;
+          return localFlows;
+        }
+      } catch (e) {}
+    }
+  }
+
+  return [];
+}
+
+// 依據單筆 Event 紀錄取得其所屬場次的工站流向標籤 (供詳細數據 Table 與 CSV 顯示不同測試場次之流程關係)
+function getStationFlowInfoForEvent(row) {
+  const st = (row && row.station_id ? row.station_id : "").trim();
+  const grp = (row && row.group_id ? row.group_id : "").trim();
+  if (!st || !grp) return { flowKey: grp, nextText: "", html: st, csvFlow: st };
+
+  const isT = isTestProductId(row.product_id);
+  const rRound = isT ? (getTestRoundFromProductId(row.product_id) || 1) : null;
+  const flowKey = isT ? `${grp}-T${rRound}` : `${grp}-OFFICIAL`;
+
+  const cache = window.cachedGroupFlows || {};
+  let flows = cache[flowKey];
+  if (!Array.isArray(flows) || flows.length === 0) {
+    const localRaw = localStorage.getItem(`ie_chair_flow_backup_${flowKey}`);
+    if (localRaw) {
+      try { flows = JSON.parse(localRaw); } catch(e) {}
+    }
+  }
+  if ((!Array.isArray(flows) || flows.length === 0) && isT && rRound > 1) {
+    for (let r = rRound - 1; r >= 1; r--) {
+      const k = `${grp}-T${r}`;
+      if (Array.isArray(cache[k]) && cache[k].length > 0) { flows = cache[k]; break; }
+    }
+  }
+  if (!Array.isArray(flows) || flows.length === 0) {
+    flows = cache[grp] || [];
+    if (flows.length === 0) {
+      const baseRaw = localStorage.getItem(`ie_chair_flow_backup_${grp}`);
+      if (baseRaw) {
+        try { flows = JSON.parse(baseRaw) || []; } catch(e) {}
+      }
+    }
+  }
+
+  if (!Array.isArray(flows) || flows.length === 0) {
+    return { flowKey, nextText: "", html: `<b>${st}</b>`, csvFlow: st };
+  }
+
+  const preds = flows.filter(f => (f.next_station_id || "").trim() === st).map(f => (f.station_id || "").trim()).filter(Boolean);
+  const succs = flows.filter(f => (f.station_id || "").trim() === st).map(f => (f.next_station_id || "").trim()).filter(Boolean);
+  const isRoot = preds.length === 0;
+  const isTerm = succs.length === 0;
+
+  let badge = "";
+  let csvFlow = st;
+  if (isRoot && !isTerm) {
+    badge = `<span style="font-size:11px; color:#0369a1; background:#e0f2fe; border:1px solid #bae6fd; padding:1px 6px; border-radius:4px; margin-left:4px; white-space:nowrap;">🏁起點 ➔ ${succs.join("/")}</span>`;
+    csvFlow = `${st}(起點)->${succs.join("/")}`;
+  } else if (isTerm) {
+    badge = `<span style="font-size:11px; color:#7e22ce; background:#f3e8ff; border:1px solid #d8b4fe; padding:1px 6px; border-radius:4px; margin-left:4px; white-space:nowrap;">🏁終點站</span>`;
+    csvFlow = `${st}(終點)`;
+  } else {
+    badge = `<span style="font-size:11px; color:#475569; background:#f1f5f9; border:1px solid #cbd5e1; padding:1px 6px; border-radius:4px; margin-left:4px; white-space:nowrap;">➔ ${succs.join("/")}</span>`;
+    csvFlow = `${st}->${succs.join("/")}`;
+  }
+
+  return {
+    flowKey,
+    nextText: succs.join("/"),
+    html: `<b>${st}</b>${badge}`,
+    csvFlow
+  };
+}
+
+// 核心讀取與渲染
+async function loadAll() {
+  const grpSelectEl = document.getElementById("groupSelect");
+  if (urlLockedGroup && grpSelectEl) {
+    grpSelectEl.value = urlLockedGroup;
+  }
+  const group = urlLockedGroup || (grpSelectEl ? grpSelectEl.value : "G02");
+
+  try {
+    // 依照開工時間由最早至最新排序 (正序，符合生產流動時間序)
+    let eventUrl = `${SUPABASE_URL}/rest/v1/event?select=*&order=start_time.asc`;
+    if (group !== "ALL") {
+      eventUrl += `&group_id=eq.${encodeURIComponent(group)}`;
+    }
+    const evRes = await fetch(eventUrl, {
+      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+    });
+    const evJson = await evRes.json();
+    currentEvents = Array.isArray(evJson) ? evJson : [];
+
+    // 前端二次排序保證嚴格由最早至最新 (Earliest to Latest)
+    currentEvents.sort((a, b) => {
+      const tA = new Date(a.start_time || a.finish_time || a.created_at || 0).getTime();
+      const tB = new Date(b.start_time || b.finish_time || b.created_at || 0).getTime();
+      return tA - tB;
+    });
+
+    try {
+      if (!isSwitchingModeOrRound && (Date.now() - lastLocalModeChangeAt) > 5000) {
+        const modeRes = await fetch(`${SUPABASE_URL}/rest/v1/station_wip?station_id=eq.SYSTEM_MODE`, {
+          headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+        });
+        const modeRows = await modeRes.json();
+        if (Array.isArray(modeRows) && modeRows.length > 0 && !isSwitchingModeOrRound && (Date.now() - lastLocalModeChangeAt) > 5000) {
+          const decodedMode = decodeSystemModeInput(modeRows[0].input_wip);
+          currentSystemMode = decodedMode.mode;
+          currentTestRound = decodedMode.round;
+          const decodedCd = decodeSystemCooldownOutput(modeRows[0].output_wip);
+          currentCooldownSec = decodedCd.startCd;
+          currentFinishCooldownSec = decodedCd.finishCd;
+          updateModeButtonsUI();
+        }
+      } else {
+        updateModeButtonsUI();
+      }
+    } catch(e) {}
+
+    updateFlowViewRoundUI();
+
+    if (group !== "ALL") {
+      const viewRound = getEffectiveViewRound();
+      const roundParam = viewRound.mode === "OFFICIAL" ? "OFFICIAL" : String(viewRound.round || currentTestRound);
+      const lockSuffix = urlLockedGroup ? "&lock=1" : "";
+      const targetQrHref = `qrcode.html?group=${encodeURIComponent(group)}&round=${encodeURIComponent(roundParam)}${lockSuffix}`;
+      document.getElementById("flowCard").style.display = "block";
+      const flowGrpBadge = document.getElementById("flowGroupTitleBadge");
+      if (flowGrpBadge) flowGrpBadge.textContent = `【${group}】`;
+      const gotoBtn = document.getElementById("gotoQrcodeBtn");
+      if (gotoBtn) {
+        gotoBtn.href = targetQrHref;
+        gotoBtn.innerHTML = `🖨️ 前往【${group} - ${viewRound.label}】QR Code 桌牌與料號設定 ❯`;
+        gotoBtn.style.display = "inline-flex";
+      }
+      const topGotoBtn = document.getElementById("topGotoQrcodeBtn");
+      if (topGotoBtn) {
+        topGotoBtn.href = targetQrHref;
+        topGotoBtn.innerHTML = `🖨️ 前往【${group}】QR Code 頁面 ❯`;
+        topGotoBtn.style.display = "inline-flex";
+      }
+      await renderFlowDiagram(group);
+    } else {
+      document.getElementById("flowCard").style.display = "none";
+      const gotoBtn = document.getElementById("gotoQrcodeBtn");
+      if (gotoBtn) gotoBtn.style.display = "none";
+      const topGotoBtn = document.getElementById("topGotoQrcodeBtn");
+      if (topGotoBtn) topGotoBtn.style.display = "none";
+    }
+
+    showTable(currentEvents);
+    showStats(currentEvents);
+    document.getElementById("downloadBtn").disabled = currentEvents.length === 0;
+
+    const now = new Date().toLocaleTimeString();
+    document.getElementById("status").textContent = `最後同步：${now} (${currentEvents.length} 筆)`;
+  } catch (err) {
+    document.getElementById("status").textContent = "同步異常：" + err.message;
+  }
+}
+
+// 畫工站順序圖 (支援每次測試擁有獨立流程圖 + 多站匯流齊套數計算)
+async function renderFlowDiagram(group) {
+  const container = document.getElementById("flowchartContainer");
+  const viewRound = getEffectiveViewRound();
+  const flowKey = getFlowKeyForRound(group, viewRound);
+
+  const [flows, wipRes] = await Promise.all([
+    fetchAndResolveFlowsForRound(group, viewRound),
+    fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${group}`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+    })
+  ]);
+
+  const wipsJson = await wipRes.json();
+  const wips = Array.isArray(wipsJson) ? wipsJson : [];
+  window.cachedGroupFlows = window.cachedGroupFlows || {};
+  if (Array.isArray(flows) && flows.length > 0) {
+    window.cachedGroupFlows[flowKey] = flows;
+    window.cachedGroupFlows[group] = flows;
+    try {
+      localStorage.setItem(`ie_chair_flow_backup_${flowKey}`, JSON.stringify(flows));
+      if (viewRound.isLive) {
+        localStorage.setItem(`ie_chair_flow_backup_${group}`, JSON.stringify(flows));
+      }
+    } catch (e) {}
+  }
+
+  if (!Array.isArray(flows) || flows.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center; padding: 20px;">
+        <p style="color:#64748b;">本組（${group}）於【${viewRound.label}】尚未設定工站順序流程。</p>
+        <button onclick="openFlowModal()" class="btn-edit" style="padding:8px 16px;">
+          🛠️ 立即自訂【${viewRound.label}】工站順序
+        </button>
+      </div>`;
+    return;
+  }
+
+  const roundEvents = currentEvents.filter(r =>
+    (r.group_id || "").trim() === group && isEventInViewRound(r, viewRound)
+  );
+  const roundOutMap = {};
+  roundEvents.forEach(r => {
+    const st = (r.station_id || "").trim();
+    if (st) roundOutMap[st] = (roundOutMap[st] || 0) + 1;
+  });
+
+  const wipMap = {};
+  wips.forEach(w => {
+    const stKey = (w.station_id || "").trim();
+    wipMap[stKey] = {
+      inWip: w.input_wip || 0,
+      outWip: roundOutMap[stKey] || 0
+    };
+  });
+
+  const stationSet = new Set();
+  flows.forEach(f => {
+    if (f.station_id) stationSet.add(f.station_id.trim());
+    if (f.next_station_id) stationSet.add(f.next_station_id.trim());
+  });
+
+  // 確保每個上線工站在該檢視場次都有獨立且精準的完工數 (outWip)，讓第 1~10 次測試流程圖成績完全獨立互不影響
+  stationSet.forEach(stId => {
+    if (stId === "SYSTEM_MODE") return;
+    if (!wipMap[stId]) {
+      wipMap[stId] = { inWip: 0, outWip: roundOutMap[stId] || 0 };
+    } else {
+      wipMap[stId].outWip = roundOutMap[stId] || 0;
+    }
+  });
+
+  let code = "graph LR\n";
+  const styles = [];
+
+  stationSet.forEach(stId => {
+    if (stId === "SYSTEM_MODE") return;
+    const w = wipMap[stId] || { inWip: 0, outWip: 0 };
+    const rawCfg = getStationRaw(group, stId, viewRound);
+    const hasRaw = !!rawCfg.hasRaw;
+    const rawName = rawCfg.rawName || "";
+
+    // 找出所有前置來源站 (predecessors)
+    const predecessors = flows
+      .filter(f => (f.next_station_id || "").trim() === stId)
+      .map(f => (f.station_id || "").trim());
+
+    // 找出所有後續去向站 (successors)
+    const successors = flows
+      .filter(f => (f.station_id || "").trim() === stId)
+      .map(f => (f.next_station_id || "").trim())
+      .filter(Boolean);
+
+    // 1. 計算【站前可用量 / 齊套數】(支援初始半成品備料可為 0 或任意套數，設定後立即生效並防止雙重扣減)
+    const isRoot = predecessors.length === 0;
+    const isMerge = predecessors.length > 1;
+    let inQty = 0;
+    let feederKit = 0;
+    const hasCfgSub = (!isRoot && rawCfg.subInit !== undefined && rawCfg.subInit !== null);
+    const cfgSub = hasCfgSub ? Math.max(0, parseInt(rawCfg.subInit, 10) || 0) : 0;
+    const manualAdded = (!viewRound.isLive)
+      ? cfgSub
+      : ((!isRoot && w.outWip === 0 && hasCfgSub) ? cfgSub : Math.max(w.inWip || 0, cfgSub));
+
+    // 若為目前進行中場次、尚未開工且雲端 input_wip 與設定值不同，自動背景同步至雲端資料庫
+    if (viewRound.isLive && !isRoot && w.outWip === 0 && hasCfgSub && (w.inWip || 0) !== cfgSub) {
+      fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=eq.${encodeURIComponent(stId)}`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ input_wip: cfgSub, updated_at: new Date().toISOString() })
+      }).catch(() => {});
+    }
+
+    const remainingManualBuffer = Math.max(0, manualAdded - w.outWip);
+    const feederConsumed = Math.max(0, w.outWip - manualAdded);
+
+    let totalSub = remainingManualBuffer;
+    let rawStock = 0;
+    if (isRoot) {
+      inQty = 9999;
+      totalSub = 9999;
+    } else {
+      let minAvail = 999999;
+      predecessors.forEach(p => {
+        const pOut = wipMap[p]?.outWip || 0;
+        const avail = Math.max(0, pOut - feederConsumed);
+        if (avail < minAvail) minAvail = avail;
+      });
+      feederKit = minAvail === 999999 ? 0 : minAvail;
+      totalSub = feederKit + remainingManualBuffer;
+      if (hasRaw && rawName) {
+        const initRawVal = (rawCfg.rawInit !== undefined && rawCfg.rawInit !== "") ? (parseInt(rawCfg.rawInit, 10) || 0) : 10;
+        rawStock = viewRound.isLive
+          ? ((wipMap[stId + '_RAW'] && wipMap[stId + '_RAW'].inWip !== undefined) ? wipMap[stId + '_RAW'].inWip : initRawVal)
+          : Math.max(0, initRawVal - w.outWip);
+        inQty = Math.min(totalSub, rawStock);
+      } else {
+        inQty = totalSub;
+      }
+    }
+
+    // 2. 計算【站後在庫量】: 本站完工 - 下游站自本站領取之消耗量
+    const isFinalStation = successors.length === 0;
+    let currentOutBuffer = w.outWip;
+
+    if (!isFinalStation) {
+      let downstreamConsumed = 0;
+      successors.forEach(s => {
+        const sWip = wipMap[s] || { inWip: 0, outWip: 0 };
+        const sRawCfg = getStationRaw(group, s, viewRound);
+        const sHasCfgSub = (sRawCfg.subInit !== undefined && sRawCfg.subInit !== null);
+        const sCfgSub = sHasCfgSub ? Math.max(0, parseInt(sRawCfg.subInit, 10) || 0) : 0;
+        const sManualAdded = (sWip.outWip === 0 && sHasCfgSub) ? sCfgSub : Math.max(sWip.inWip || 0, sCfgSub);
+        const sFeederConsumed = Math.max(0, (sWip.outWip || 0) - sManualAdded);
+        if (sFeederConsumed > downstreamConsumed) downstreamConsumed = sFeederConsumed;
+      });
+      currentOutBuffer = Math.max(0, w.outWip - downstreamConsumed);
+    }
+
+    // 3. 節點標籤呈現
+    let inText = "";
+    if (isRoot) {
+      inText = "📥 原料: 無限供應";
+    } else if (hasRaw) {
+      inText = (hasRaw && rawName) ? `📥 半成品: ${totalSub}套 ｜ ${rawName}: ${rawStock}件 ➔ 可開工: ${inQty}套` : `📥 半成品: ${totalSub}套 ➔ 可開工: ${inQty}套`;
+    } else {
+      inText = `📥 半成品: ${totalSub}${isMerge ? '套' : '件'} ➔ 可開工: ${inQty}${isMerge ? '套' : '件'}`;
+    }
+
+    let outText = "";
+    if (isFinalStation) {
+      outText = `🏁 總成品: ${w.outWip} 件`;
+    } else {
+      outText = `📤 累計完工: ${w.outWip} 件 (站後待領: ${currentOutBuffer} 件)`;
+    }
+
+    const partNo = getStationPart(group, stId);
+    let partTag = partNo ? `<br><b style='color:#1e40af; font-size:12px;'>🏷️ 料號: ${partNo}</b>` : "";
+    if (hasRaw && rawName) {
+      partTag += `<br><span style='color:#b45309; font-size:11px; font-weight:bold;'>📦 配件: ${rawName}</span>`;
+    }
+
+    const isBottleneck = (stId === window.currentBottleneckStation && window.currentMaxCycle > 0);
+    const bottleneckTag = isBottleneck ? `<br><b style='color:#dc2626;'>🚨 瓶頸站 (CT: ${window.currentMaxCycle.toFixed(1)}s)</b>` : "";
+
+    code += `  ${stId}["<b>${stId}</b>${partTag}<br>${inText}<br>${outText}${bottleneckTag}"]\n`;
+
+    // 4. 顏色預警邏輯 (嚴格符合圖例規範)：
+    if (isBottleneck) {
+      styles.push(`style ${stId} fill:#fee2e2,stroke:#dc2626,stroke-width:4px;`); // 🚨 紅燈 (瓶頸站，Cycle Time 最大值)
+    } else if (isRoot) {
+      styles.push(`style ${stId} fill:#dcfce7,stroke:#16a34a,stroke-width:2px;`); // 🟢 綠燈 (起始工站原料無限充足)
+    } else if (inQty === 0) {
+      styles.push(`style ${stId} fill:#fef9c3,stroke:#ca8a04,stroke-width:2px;`); // 黃燈 (物料缺料飢餓，可開工為0)
+    } else {
+      styles.push(`style ${stId} fill:#dcfce7,stroke:#16a34a,stroke-width:2px;`); // 綠燈 (流暢正常，物料充足)
+    }
+  });
+
+  flows.forEach(f => {
+    if (f.next_station_id) {
+      code += `  ${f.station_id.trim()} --> ${f.next_station_id.trim()}\n`;
+    }
+  });
+
+  code += styles.join("\n");
+
+  try {
+    const { svg } = await mermaid.render("mermaidGraph_" + Date.now(), code);
+    container.innerHTML = svg;
+  } catch (err) {
+    container.innerHTML = "<div style='color:red;'>流程圖語法產生錯誤</div>";
+  }
+}
+
+// 工站自訂編輯器 Modal
+document.getElementById("openFlowEditorBtn").onclick = openFlowModal;
+
+async function openFlowModal() {
+  if (!isAdminLoggedIn) {
+    alert("⚠️ 權限不足：修改工站順序需管理員權限！請先點擊上方「🔒 現場看板模式 (點擊解鎖管理)」。");
+    return;
+  }
+  resetAutoLock();
+  const group = document.getElementById("groupSelect").value;
+  if (group === "ALL") {
+    alert("請先選擇特定的單一組別（例如 G02）再自訂工站流程！");
+    return;
+  }
+
+  const viewRound = getEffectiveViewRound();
+  const flowKey = getFlowKeyForRound(group, viewRound);
+  const titleEl = document.getElementById("flowModalTitle");
+  const badgeEl = document.getElementById("flowModalRoundBadge");
+  if (titleEl) {
+    titleEl.textContent = `🛠️ 自訂【${group} - ${viewRound.label}】工站前後流向關係`;
+  }
+  if (badgeEl) {
+    badgeEl.textContent = `場次代碼：${flowKey}`;
+  }
+
+  document.getElementById("flowModal").style.display = "block";
+  const container = document.getElementById("flowRowsContainer");
+  container.innerHTML = "<div style='color:#64748b;'>載入現有順序...</div>";
+  const rawContainer = document.getElementById("modalRawConfigContainer");
+  if (rawContainer) rawContainer.innerHTML = "";
+
+  const data = await fetchAndResolveFlowsForRound(group, viewRound);
+  container.innerHTML = "";
+
+  if (Array.isArray(data) && data.length > 0) {
+    data.forEach(item => addFlowRow(item.station_id, item.next_station_id, false));
+  } else {
+    presetStandardFlow(false);
+  }
+
+  // 依上方流程圖有幾組工站，下方零件選擇就動態顯示幾組
+  refreshModalRawConfigs(group);
+}
+
+function closeFlowModal() {
+  document.getElementById("flowModal").style.display = "none";
+}
+
+// 取得當前流向編輯器中所有有出現的工站代號 (保持 ST01~ST10 自然順序)
+function getStationsFromFlowModal() {
+  const set = new Set();
+  const rows = document.querySelectorAll("#flowRowsContainer .flow-row");
+  rows.forEach(r => {
+    const from = (r.querySelector(".from-st")?.value || "").trim();
+    const to = (r.querySelector(".to-st")?.value || "").trim();
+    if (from) set.add(from);
+    if (to) set.add(to);
+  });
+  const ordered = allStations.filter(s => set.has(s));
+  set.forEach(s => {
+    if (s && !ordered.includes(s)) ordered.push(s);
+  });
+  return ordered.length > 0 ? ordered : [...allStations];
+}
+
+// 動態更新彈窗內的原生零件投料選項：上方流程有幾組工站，下方就出現幾組
+function refreshModalRawConfigs(group) {
+  if (!group) group = document.getElementById("groupSelect").value;
+  const rawContainer = document.getElementById("modalRawConfigContainer");
+  if (!rawContainer) return;
+
+  const viewRound = getEffectiveViewRound();
+  const flowKey = getFlowKeyForRound(group, viewRound);
+
+  const flowRows = document.querySelectorAll("#flowRowsContainer .flow-row");
+  const flowPairs = [];
+  flowRows.forEach(r => {
+    const from = (r.querySelector(".from-st")?.value || "").trim();
+    const to = (r.querySelector(".to-st")?.value || "").trim();
+    if (from && to) flowPairs.push({ from, to });
+  });
+
+  // 1. 暫存使用者在彈窗中即時填寫的資料，避免上方加減工站時重繪遺失
+  const tempValues = {};
+  rawContainer.querySelectorAll(".modal-sub-init").forEach(inp => {
+    const st = inp.dataset.station;
+    if (!tempValues[st]) tempValues[st] = {};
+    tempValues[st].subInit = inp.value !== "" ? parseInt(inp.value, 10) : 0;
+  });
+  rawContainer.querySelectorAll(".modal-raw-check").forEach(chk => {
+    const st = chk.dataset.station;
+    const isChecked = chk.checked;
+    const nameVal = document.getElementById(`modalRawName_${st}`)?.value;
+    const initVal = document.getElementById(`modalRawInit_${st}`)?.value;
+    if (!tempValues[st]) tempValues[st] = {};
+    tempValues[st].hasRaw = isChecked;
+    tempValues[st].rawName = nameVal;
+    tempValues[st].rawInit = (initVal !== undefined && initVal !== "") ? parseInt(initVal, 10) : undefined;
+  });
+
+  // 2. 取得儲存在 localStorage 的場次設定 (優先讀取該場次 flowKey，若無則繼承 group)
+  const allRaw = JSON.parse(localStorage.getItem("ie_chair_group_station_raw") || "{}");
+  const groupRaw = allRaw[flowKey] || allRaw[group] || {};
+
+  // 3. 取得目前上方流程中有配置的工站 (有幾組出現幾組)
+  const activeStations = getStationsFromFlowModal();
+
+  const countBadge = document.getElementById("modalStationCountBadge");
+  if (countBadge) {
+    countBadge.textContent = `共 ${activeStations.length} 組上線工站`;
+  }
+
+  rawContainer.innerHTML = "";
+
+  activeStations.forEach(st => {
+    const preds = flowPairs.filter(p => p.to === st).map(p => p.from);
+    const isRoot = preds.length === 0;
+    const savedCfg = tempValues[st] || groupRaw[st] || {};
+    const hasRaw = (savedCfg.hasRaw === true);
+    const rawName = (hasRaw && savedCfg.rawName !== undefined && savedCfg.rawName !== null) ? String(savedCfg.rawName) : "";
+    const rawInit = (hasRaw && savedCfg.rawInit !== undefined && savedCfg.rawInit !== null && savedCfg.rawInit !== "") ? savedCfg.rawInit : "";
+
+    const div = document.createElement("div");
+    if (isRoot) {
+      div.style.cssText = "background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; box-sizing:border-box;";
+      div.innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-weight:bold; color:#166534; font-size:14px;">🏁 ${st} 起始工站</span>
+          <span style="font-size:12px; color:#15803d; background:#dcfce7; padding:2px 8px; border-radius:6px; font-weight:600;">🟢 原料無限供應（常駐充足，隨時可開工）</span>
+        </div>
+        <span style="background:#bbf7d0; color:#14532d; font-size:11px; font-weight:bold; padding:3px 10px; border-radius:12px; border:1px solid #86efac; white-space:nowrap;">原料無限 ∞</span>
+      `;
+    } else {
+      const subInitVal = (savedCfg.subInit !== undefined && savedCfg.subInit !== null) ? Math.max(0, parseInt(savedCfg.subInit, 10) || 0) : 0;
+      div.style.cssText = "background:#fff; border:1px solid #fcd34d; border-radius:8px; padding:10px 14px; display:flex; flex-direction:column; gap:8px; box-sizing:border-box;";
+      div.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-weight:bold; color:#1e293b; font-size:13px;">🧩 ${st} 後續工站</span>
+          <span style="font-size:11px; color:#b45309; background:#fef3c7; padding:2px 8px; border-radius:4px; font-weight:bold; border:1px solid #fde68a;">需前置工站：${preds.join(" + ")}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; background:#fffbeb; padding:6px 10px; border-radius:6px; border:1px solid #fef08a; flex-wrap:wrap;">
+          <span style="font-size:12px; font-weight:bold; color:#92400e; white-space:nowrap;">📦 站前半成品初始備料（選填，可為 0）：</span>
+          <div style="display:inline-flex; align-items:center; background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:0 6px; box-sizing:border-box;">
+            <input type="number" id="modalSubInit_${st}" class="modal-sub-init" data-station="${st}" value="${subInitVal}" min="0" placeholder="0" style="border:none; outline:none; width:45px; padding:4px 0; font-size:13px; text-align:right; font-weight:bold; color:#1e40af;">
+            <span style="font-size:11px; font-weight:bold; color:#92400e; margin-left:3px; white-space:nowrap;">套</span>
+          </div>
+          <span style="font-size:11px; color:#64748b;">(可設為 0 或任意套數；設定後流程圖與計時器立即同步)</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="modalRawCheck_${st}" class="modal-raw-check" data-station="${st}" ${hasRaw ? "checked" : ""} style="cursor:pointer; width:14px; height:14px; margin:0;">
+          <label for="modalRawCheck_${st}" style="font-size:12px; color:#475569; cursor:pointer; margin:0; font-weight:600;">
+            ＋ 附加站前專屬零件 (選填，如螺絲料盒)
+          </label>
+        </div>
+        <div id="modalRawBox_${st}" style="display:${hasRaw ? 'flex' : 'none'}; align-items:center; gap:6px; margin-left:20px; font-size:12px; flex-wrap:wrap; background:#f8fafc; padding:6px 10px; border-radius:6px; border:1px solid #e2e8f0;">
+          <span style="color:#64748b; font-weight:bold; white-space:nowrap;">零件名稱:</span>
+          <input type="text" id="modalRawName_${st}" value="${rawName}" placeholder="" style="padding:4px 8px; font-size:12px; flex:1; min-width:80px; border:1px solid #cbd5e1; border-radius:4px; box-sizing:border-box;">
+          <span style="color:#64748b; font-weight:bold; white-space:nowrap;">備料:</span>
+          <div style="display:inline-flex; align-items:center; background:#fff; border:1px solid #cbd5e1; border-radius:4px; padding:0 4px; box-sizing:border-box;">
+            <input type="number" id="modalRawInit_${st}" value="${rawInit}" placeholder="" min="0" style="border:none; outline:none; width:42px; padding:3px 0; font-size:12px; text-align:right;">
+            <span style="font-size:11px; font-weight:bold; color:#64748b; margin-left:2px; white-space:nowrap;">顆</span>
+          </div>
+        </div>
+      `;
+      const chk = div.querySelector(`#modalRawCheck_${st}`);
+      const box = div.querySelector(`#modalRawBox_${st}`);
+      const nameInp = div.querySelector(`#modalRawName_${st}`);
+      const initInp = div.querySelector(`#modalRawInit_${st}`);
+      if (chk && box) {
+        chk.onchange = function() {
+          box.style.display = this.checked ? "flex" : "none";
+          // 勾選或取消勾選時皆不自動帶入任何預設值，保持空白讓使用者自行輸入
+          if (nameInp) nameInp.value = "";
+          if (initInp) initInp.value = "";
+        };
+      }
+    }
+    rawContainer.appendChild(div);
+  });
+}
+
+function addFlowRow(fromSt = "ST01", toSt = "", triggerRefresh = true) {
+  const container = document.getElementById("flowRowsContainer");
+  const row = document.createElement("div");
+  row.className = "flow-row";
+
+  let fromOptions = allStations.map(s => `<option value="${s}" ${s === fromSt ? "selected" : ""}>${s}</option>`).join("");
+  let toOptions = `<option value="">-- 無(產線終點) --</option>` +
+    allStations.map(s => `<option value="${s}" ${s === toSt ? "selected" : ""}>${s}</option>`).join("");
+
+  row.innerHTML = `
+    <select class="from-st">${fromOptions}</select>
+    <span style="font-weight:bold; color:#64748b;">➡️ 送往 ➡️</span>
+    <select class="to-st">${toOptions}</select>
+    <button type="button" class="del-flow-btn" style="background:#fee2e2; border:none; color:#dc2626; border-radius:6px; padding:6px 10px; cursor:pointer;">🗑️</button>
+  `;
+  container.appendChild(row);
+
+  const group = document.getElementById("groupSelect").value;
+  row.querySelector(".from-st").onchange = () => refreshModalRawConfigs(group);
+  row.querySelector(".to-st").onchange = () => refreshModalRawConfigs(group);
+  row.querySelector(".del-flow-btn").onclick = function() {
+    row.remove();
+    refreshModalRawConfigs(group);
+  };
+
+  if (triggerRefresh) {
+    refreshModalRawConfigs(group);
+  }
+}
+
+function presetStandardFlow(triggerRefresh = true) {
+  const container = document.getElementById("flowRowsContainer");
+  container.innerHTML = "";
+  for (let i = 0; i < allStations.length; i++) {
+    const cur = allStations[i];
+    const nxt = (i < allStations.length - 1) ? allStations[i+1] : "";
+    addFlowRow(cur, nxt, false);
+  }
+  const group = document.getElementById("groupSelect").value;
+  if (triggerRefresh) {
+    refreshModalRawConfigs(group);
+  }
+}
+
+async function saveCustomFlow() {
+  const group = document.getElementById("groupSelect").value;
+  const rows = document.querySelectorAll("#flowRowsContainer .flow-row");
+  if (rows.length === 0) {
+    alert("請至少設定一個工站！");
+    return;
+  }
+
+  const viewRound = getEffectiveViewRound();
+  const flowKey = getFlowKeyForRound(group, viewRound);
+
+  // 為該場次建立獨立的 station_flow 資料列 (group_id = G01-T1 ~ G01-T10 或 G01-OFFICIAL)
+  const payload = [];
+  const basePayload = [];
+  rows.forEach(r => {
+    const from = r.querySelector(".from-st").value;
+    const to = r.querySelector(".to-st").value || null;
+    payload.push({
+      group_id: flowKey,
+      station_id: from,
+      station_name: from,
+      next_station_id: to
+    });
+    basePayload.push({
+      group_id: group,
+      station_id: from,
+      station_name: from,
+      next_station_id: to
+    });
+  });
+
+  // 收集並保存原生零件投料設定與強制前置半成品初始備料 (subInit) 至該場次 flowKey
+  const allRaw = JSON.parse(localStorage.getItem("ie_chair_group_station_raw") || "{}");
+  const newGroupRaw = {};
+  const activeStations = getStationsFromFlowModal();
+  activeStations.forEach(st => {
+    const preds = payload.filter(p => (p.next_station_id || "").trim() === st).map(p => (p.station_id || "").trim());
+    const isRoot = preds.length === 0;
+
+    let subInitVal = 0;
+    if (!isRoot) {
+      const subInp = document.getElementById(`modalSubInit_${st}`);
+      const parsed = (subInp && subInp.value !== "") ? parseInt(subInp.value, 10) : 0;
+      subInitVal = (!isNaN(parsed) && parsed >= 0) ? parsed : 0;
+    }
+
+    const chk = document.getElementById(`modalRawCheck_${st}`);
+    const hasRaw = chk ? chk.checked : false;
+    const nameInput = document.getElementById(`modalRawName_${st}`);
+    const initInput = document.getElementById(`modalRawInit_${st}`);
+    const rawInitStr = (hasRaw && initInput) ? initInput.value.trim() : "";
+    newGroupRaw[st] = {
+      isRoot: isRoot,
+      subInit: isRoot ? 0 : subInitVal,
+      hasRaw: hasRaw,
+      rawName: (hasRaw && nameInput) ? nameInput.value.trim() : "",
+      rawInit: rawInitStr !== "" ? (parseInt(rawInitStr, 10) || 0) : ""
+    };
+  });
+  allRaw[flowKey] = newGroupRaw;
+  if (viewRound.isLive) {
+    allRaw[group] = newGroupRaw;
+  }
+  localStorage.setItem("ie_chair_group_station_raw", JSON.stringify(allRaw));
+
+  try {
+    // 🛡️ 若目前修改的是第 2~10 次測試或正式實作，且第 1 次測試 (`${group}-T1`) 尚未獨立封存，先將原本舊的 `${group}` 流程自動快照封存至 `${group}-T1`，確保第 1 次測試流程圖 100% 不被覆蓋！
+    if (flowKey !== `${group}-T1`) {
+      const t1Key = `${group}-T1`;
+      const existingT1 = window.cachedGroupFlows && window.cachedGroupFlows[t1Key];
+      const existingBase = window.cachedGroupFlows && window.cachedGroupFlows[group];
+      if ((!existingT1 || existingT1.length === 0) && Array.isArray(existingBase) && existingBase.length > 0) {
+        const t1Snapshot = existingBase.map(item => ({
+          group_id: t1Key,
+          station_id: item.station_id,
+          station_name: item.station_name || item.station_id,
+          next_station_id: item.next_station_id || null
+        }));
+        localStorage.setItem(`ie_chair_flow_backup_${t1Key}`, JSON.stringify(t1Snapshot));
+        await fetch(`${SUPABASE_URL}/rest/v1/station_flow?group_id=eq.${encodeURIComponent(t1Key)}`, {
+          method: "DELETE",
+          headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+        });
+        await fetch(`${SUPABASE_URL}/rest/v1/station_flow`, {
+          method: "POST",
+          headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify(t1Snapshot)
+        });
+      }
+    }
+
+    // 🛡️ 寫入該場次專屬的本地備份與雲端 station_flow (group_id = flowKey)
+    localStorage.setItem(`ie_chair_flow_backup_${flowKey}`, JSON.stringify(payload));
+    await fetch(`${SUPABASE_URL}/rest/v1/station_flow?group_id=eq.${encodeURIComponent(flowKey)}`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+    });
+    const postRes = await fetch(`${SUPABASE_URL}/rest/v1/station_flow`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!postRes.ok) {
+      const errText = await postRes.text();
+      throw new Error(`雲端寫入失敗 (${postRes.status}): ${errText}`);
+    }
+
+    // 若編輯的是當前進行中的場次，同步更新基準 group_id，讓現場手機與桌牌頁面也能無縫取得最新場次流程
+    if (viewRound.isLive) {
+      localStorage.setItem(`ie_chair_flow_backup_${group}`, JSON.stringify(basePayload));
+      await fetch(`${SUPABASE_URL}/rest/v1/station_flow?group_id=eq.${encodeURIComponent(group)}`, {
+        method: "DELETE",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+      });
+      await fetch(`${SUPABASE_URL}/rest/v1/station_flow`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(basePayload)
+      });
+    }
+
+    closeFlowModal();
+    const clearOld = confirm(`✓ 【${group} - ${viewRound.label}】的專屬流程圖已成功儲存！（其他場次的流程圖不受影響）\n\n💡 建議：是否要一併清空【${group}】在【${viewRound.label}】的舊紀錄與庫存，以全新狀態開始計時？\n（點擊「確定」僅重置本場次紀錄；點擊「取消」保留目前紀錄）`);
+    if (clearOld) {
+      try {
+        await deleteGroupRoundEvents(group, viewRound);
+      } catch(e) {}
+    }
+
+    // 🌟 若為目前進行中場次，同步更新每站的 station_wip：起始站 input_wip = 0，後續工站立即套用設定之半成品數 subInit
+    if (viewRound.isLive) {
+      try {
+        for (const st of activeStations) {
+          const preds = payload.filter(p => (p.next_station_id || "").trim() === st).map(p => (p.station_id || "").trim());
+          const isRoot = preds.length === 0;
+          const initialInput = isRoot ? 0 : (newGroupRaw[st]?.subInit ?? 0);
+
+          const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=eq.${encodeURIComponent(st)}&select=id,input_wip,output_wip`, {
+            headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+          });
+          const existing = await checkRes.json();
+          if (Array.isArray(existing) && existing.length > 0) {
+            await fetch(`${SUPABASE_URL}/rest/v1/station_wip?id=eq.${existing[0].id}`, {
+              method: "PATCH",
+              headers: {
+                apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                input_wip: initialInput,
+                output_wip: clearOld ? 0 : existing[0].output_wip,
+                updated_at: new Date().toISOString()
+              })
+            });
+          } else {
+            await fetch(`${SUPABASE_URL}/rest/v1/station_wip`, {
+              method: "POST",
+              headers: {
+                apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({ group_id: group, station_id: st, input_wip: initialInput, output_wip: 0 })
+            });
+          }
+
+          // 若有附加專屬零件，同步更新 ${st}_RAW
+          if (newGroupRaw[st]?.hasRaw) {
+            const rawSt = `${st}_RAW`;
+            const rawInit = newGroupRaw[st].rawInit || 0;
+            const checkRaw = await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=eq.${encodeURIComponent(rawSt)}&select=id`, {
+              headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+            });
+            const existingRaw = await checkRaw.json();
+            if (Array.isArray(existingRaw) && existingRaw.length > 0) {
+              if (clearOld) {
+                await fetch(`${SUPABASE_URL}/rest/v1/station_wip?id=eq.${existingRaw[0].id}`, {
+                  method: "PATCH",
+                  headers: {
+                    apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY,
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({ input_wip: rawInit, output_wip: 0, updated_at: new Date().toISOString() })
+                });
+              }
+            } else {
+              await fetch(`${SUPABASE_URL}/rest/v1/station_wip`, {
+                method: "POST",
+                headers: {
+                  apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ group_id: group, station_id: rawSt, input_wip: rawInit, output_wip: 0 })
+              });
+            }
+          }
+        }
+      } catch(errWip) {
+        console.warn("同步 station_wip 發生警告：", errWip);
+      }
+    }
+
+    loadAll();
+  } catch (err) {
+    alert("儲存失敗：" + err.message + "\n（但已為您留存本地備份，請檢查網路連線後再次點擊儲存）");
+  }
+}
+
+// 顯示詳細 Event Table (包含呈現各場次對應的工站流向關係)
+function showTable(data) {
+  const tbody = document.querySelector("#dataTable tbody");
+  tbody.innerHTML = "";
+  const safeData = Array.isArray(data) ? data : [];
+
+  const totalCount = safeData.length;
+  const officialCount = safeData.filter(r => !isTestProductId(r.product_id)).length;
+  const testCount = safeData.filter(r => isTestProductId(r.product_id)).length;
+
+  const elAll = document.getElementById("countAll");
+  const elOff = document.getElementById("countOfficial");
+  const elTst = document.getElementById("countTest");
+  if (elAll) elAll.textContent = totalCount;
+  if (elOff) elOff.textContent = officialCount;
+  if (elTst) elTst.textContent = testCount;
+
+  let filtered = safeData;
+  if (currentTableFilter === "OFFICIAL") {
+    filtered = safeData.filter(r => !isTestProductId(r.product_id));
+  } else if (currentTableFilter === "TEST") {
+    filtered = safeData.filter(r => {
+      if (!isTestProductId(r.product_id)) return false;
+      if (currentTestRoundFilter !== "ALL_TEST") {
+        return getTestRoundFromProductId(r.product_id) === parseInt(currentTestRoundFilter, 10);
+      }
+      return true;
+    });
+  }
+
+  filtered.forEach((row, idx) => {
+    const partNo = getStationPart(row.group_id, row.station_id);
+    const flowInfo = getStationFlowInfoForEvent(row);
+    const tr = document.createElement("tr");
+
+    // 簡化 ID 欄位：以簡潔序號 (#1, #2...) 呈現，滑鼠懸浮可查看完整 UUID
+    const shortId = `<span title="完整 UUID: ${row.id}" style="font-family:monospace; font-weight:bold; color:#475569; background:#f1f5f9; padding:2px 8px; border-radius:4px; cursor:help;">#${idx + 1}</span>`;
+
+    // 美化開工齊套數：9999 轉為「充足 (起點)」，0 標註缺料
+    let wipDisplay = row.wip_before_start;
+    if (wipDisplay === 9999 || wipDisplay >= 999) {
+      wipDisplay = `<span style="color:#16a34a; font-weight:bold;">充足 (起點)</span>`;
+    } else if (wipDisplay === 0) {
+      wipDisplay = `<span style="color:#dc2626; font-weight:bold;">0 套 (缺料)</span>`;
+    } else if (wipDisplay !== null && wipDisplay !== undefined) {
+      wipDisplay = `<span style="font-weight:bold;">${wipDisplay} 套</span>`;
+    } else {
+      wipDisplay = `<span style="color:#94a3b8;">-</span>`;
+    }
+
+    const values = [
+      shortId,
+      row.group_id,
+      (() => {
+        const isTest = isTestProductId(row.product_id);
+        const tRound = getTestRoundFromProductId(row.product_id);
+        return isTest
+          ? `<span style="background:#f3e8ff; color:#7e22ce; border:1px solid #d8b4fe; font-size:11px; padding:2px 6px; border-radius:4px; font-weight:bold; margin-right:4px;">🧪第${tRound || 1}次測試</span><b>${row.product_id || '-'}</b>`
+          : `<span style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-size:11px; padding:2px 6px; border-radius:4px; font-weight:bold; margin-right:4px;">🏆正式</span><b>${row.product_id || '-'}</b>`;
+      })(),
+      flowInfo.html,
+      partNo ? `<span style="color:#1e40af; font-weight:bold;">${partNo}</span>` : "-",
+      wipDisplay,
+      row.start_time ? new Date(row.start_time).toLocaleTimeString() : "",
+      row.finish_time ? new Date(row.finish_time).toLocaleTimeString() : "",
+      (row.duration_sec !== null && row.duration_sec !== undefined) ? Number(row.duration_sec).toFixed(1) : "-",
+      row.wip_after_finish ?? "-",
+      row.status
+    ];
+
+    values.forEach((v, idx) => {
+      const td = document.createElement("td");
+      if (idx === 0 || idx === 2 || idx === 3 || idx === 4 || idx === 5) {
+        td.innerHTML = v;
+      } else {
+        td.textContent = v ?? "";
+      }
+      tr.appendChild(td);
+    });
+
+    const actionTd = document.createElement("td");
+    actionTd.className = "admin-only";
+    actionTd.style.display = isAdminLoggedIn ? "" : "none";
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "刪除";
+    delBtn.className = "btn-danger";
+    delBtn.onclick = () => deleteRecord(row.id);
+    actionTd.appendChild(delBtn);
+    tr.appendChild(actionTd);
+
+    tbody.appendChild(tr);
+  });
+}
+
+async function deleteRecord(id) {
+  if (!isAdminLoggedIn) {
+    alert("⚠️ 權限不足：現場看板模式下禁止刪除資料！請先解鎖管理員。");
+    return;
+  }
+  resetAutoLock();
+  if (!confirm(`確定要刪除 ID: ${id} 嗎？`)) return;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/event?id=eq.${id}`, {
+    method: "DELETE",
+    headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+  });
+  if (!res.ok) {
+    alert("刪除失敗：" + res.statusText);
+  }
+  loadAll();
+}
+
+// 統計分析（嚴格依目前檢視場次 getEffectiveViewRound() 獨立計算，確保第 1 次與第 2 次測試成績互不影響）
+function showStats(data) {
+  const tbody = document.querySelector("#statTable tbody");
+  tbody.innerHTML = "";
+
+  const viewRound = getEffectiveViewRound();
+  const rows = data.filter(r => isEventInViewRound(r, viewRound));
+
+  // 1. 取得整條產線最早開工時間 (基準起跑時間)
+  const allStartTimes = rows.map(r => new Date(r.start_time).getTime()).filter(t => !isNaN(t));
+  const lineStartTime = allStartTimes.length > 0 ? Math.min(...allStartTimes) : null;
+
+  // 2. 將紀錄依工站分組
+  const stationEvents = {};
+  rows.forEach(r => {
+    const st = r.station_id ?? "(未知)";
+    if (!stationEvents[st]) stationEvents[st] = [];
+    stationEvents[st].push(r);
+  });
+
+  const stats = {};
+  const stationKeys = Object.keys(stationEvents).sort((a,b) => a.localeCompare(b));
+
+  stationKeys.forEach(station => {
+    // 依開工時間正序排序
+    const evs = stationEvents[station].slice().sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+    let runSum = 0;
+    let waitSum = 0;
+
+    evs.forEach((r, idx) => {
+      runSum += Number(r.duration_sec) || 0;
+
+      if (idx === 0) {
+        // 第一件開工前的等待時間：
+        // 若為下游工站，產線開跑後等待前置站送達半成品的飢餓時間
+        const curStart = new Date(r.start_time).getTime();
+        if (lineStartTime !== null && !isNaN(curStart)) {
+          const preWait = (curStart - lineStartTime) / 1000;
+          if (preWait > 0 && preWait < 600) {
+            waitSum += preWait;
+          }
+        }
+      } else {
+        // 第二件起：站內「上一件完工至下一件開工」的中間閒置/摸魚/換件/等料時間
+        const prevFinish = new Date(evs[idx - 1].finish_time).getTime();
+        const curStart = new Date(r.start_time).getTime();
+        if (!isNaN(prevFinish) && !isNaN(curStart)) {
+          const gap = (curStart - prevFinish) / 1000;
+          if (gap > 0 && gap < 600) {
+            waitSum += gap;
+          }
+        }
+      }
+    });
+
+    stats[station] = {
+      qty: evs.length,
+      runSum: runSum,
+      waitSum: waitSum
+    };
+  });
+  let totalQty = 0, totalRun = 0, totalWait = 0;
+
+  // 1. 找出該組 Cycle Time 最大值之瓶頸工站
+  let maxAvgCycle = 0;
+  let bottleneckStation = null;
+  stationKeys.forEach(station => {
+    const s = stats[station];
+    const avg = s.qty > 0 ? (s.runSum / s.qty) : 0;
+    s.avgCycle = avg;
+    if (s.qty > 0 && avg > maxAvgCycle) {
+      maxAvgCycle = avg;
+      bottleneckStation = station;
+    }
+  });
+
+  window.currentBottleneckStation = bottleneckStation;
+  window.currentMaxCycle = maxAvgCycle;
+
+  // 2. 顯示頂部瓶頸提醒橫幅
+  const banner = document.getElementById("bottleneckBanner");
+  const bannerText = document.getElementById("bottleneckBannerText");
+  if (bottleneckStation && maxAvgCycle > 0) {
+    banner.style.display = "flex";
+    bannerText.innerHTML = `本組產線瓶頸站：<b style="font-size:16px; color:#dc2626;">${bottleneckStation}</b>（平均 Cycle Time: <b style="font-size:16px; color:#dc2626;">${maxAvgCycle.toFixed(1)} 秒</b>，為全組最大值，限制整條線之最大產出率）`;
+  } else {
+    banner.style.display = "none";
+  }
+
+  // 2.5 ⏱️ 計算「該次生產活動的節拍時間 (Activity Takt Time = 該次活動總耗時 ÷ 共產出組數)」
+  const curGroup = document.getElementById("groupSelect").value;
+  const taktBanner = document.getElementById("taktTimeBanner");
+  let activityTaktSec = null;
+  let activityOutputSets = 0;
+  let activityTotalSec = 0;
+  let activityRoundLabel = "";
+
+  if (rows.length === 0) {
+    if (taktBanner) taktBanner.style.display = "block";
+    const activeLabel = viewRound.label;
+    const elRoundTag = document.getElementById("taktRoundTag");
+    const elOutCount = document.getElementById("taktOutputCountText");
+    const elOutSub = document.getElementById("taktOutputSubText");
+    const elTotalTime = document.getElementById("taktTotalTimeText");
+    const elTimeRange = document.getElementById("taktTimeRangeText");
+    const elTaktVal = document.getElementById("taktValueText");
+    const elTaktFormula = document.getElementById("taktFormulaDetailText");
+    const elVsBottle = document.getElementById("taktVsBottleneckText");
+    const elSteady = document.getElementById("taktSteadyIntervalText");
+    if (elRoundTag) elRoundTag.textContent = `檢視場次：${activeLabel}（尚無完工紀錄）`;
+    if (elOutCount) elOutCount.textContent = `0 組`;
+    if (elOutSub) elOutSub.textContent = `等待終點工站產出成品`;
+    if (elTotalTime) elTotalTime.textContent = `0.0 秒`;
+    if (elTimeRange) elTimeRange.textContent = `首件開工 ➔ 末件完工`;
+    if (elTaktVal) elTaktVal.textContent = `-- 秒 / 組`;
+    if (elTaktFormula) elTaktFormula.textContent = `完成作業後自動依「總耗時 ÷ 產出組數」計算`;
+    if (elVsBottle) elVsBottle.textContent = `等待工站完工紀錄寫入...`;
+    if (elSteady) elSteady.textContent = `💡 開始掃碼生產後將即時自動換算`;
+  } else {
+    if (taktBanner) taktBanner.style.display = "block";
+    const runRows = rows;
+    activityRoundLabel = viewRound.label;
+
+    // 找出該組於該場次流程的終點工站 (Final Station)
+    const curFlowKey = getFlowKeyForRound(curGroup, viewRound);
+    let groupFlows = (window.cachedGroupFlows && (window.cachedGroupFlows[curFlowKey] || window.cachedGroupFlows[curGroup])) || [];
+    if (groupFlows.length === 0 && curGroup !== "ALL") {
+      try {
+        const backupRaw = localStorage.getItem(`ie_chair_flow_backup_${curFlowKey}`) || localStorage.getItem(`ie_chair_flow_backup_${curGroup}`);
+        if (backupRaw) groupFlows = JSON.parse(backupRaw) || [];
+      } catch (e) {}
+    }
+
+    let finalStationId = null;
+    if (Array.isArray(groupFlows) && groupFlows.length > 0) {
+      const allFlowSt = new Set();
+      groupFlows.forEach(f => {
+        if (f.station_id) allFlowSt.add(f.station_id.trim());
+        if (f.next_station_id) allFlowSt.add(f.next_station_id.trim());
+      });
+      const terminals = Array.from(allFlowSt).filter(st =>
+        !groupFlows.some(f => (f.station_id || "").trim() === st && (f.next_station_id || "").trim() !== "")
+      );
+      if (terminals.length > 0) {
+        terminals.sort((a, b) => a.localeCompare(b));
+        finalStationId = terminals[terminals.length - 1];
+      }
+    }
+    if (!finalStationId && stationKeys.length > 0) {
+      finalStationId = stationKeys[stationKeys.length - 1];
+    }
+
+    // 統計該場次各站完工數
+    const runStEvents = {};
+    runRows.forEach(r => {
+      const st = (r.station_id || "").trim();
+      if (!runStEvents[st]) runStEvents[st] = [];
+      runStEvents[st].push(r);
+    });
+    const runStKeys = Object.keys(runStEvents).sort((a, b) => a.localeCompare(b));
+
+    let outputSourceStation = finalStationId;
+    let isTerminalOutput = true;
+    if (finalStationId && runStEvents[finalStationId] && runStEvents[finalStationId].length > 0) {
+      activityOutputSets = runStEvents[finalStationId].length;
+    } else if (runStKeys.length > 0) {
+      outputSourceStation = runStKeys[runStKeys.length - 1];
+      activityOutputSets = runStEvents[outputSourceStation].length;
+      isTerminalOutput = (outputSourceStation === finalStationId);
+    }
+
+    // 計算該次生產活動總耗時 (首件開工 ➔ 末件完工)
+    const runStarts = runRows.map(r => new Date(r.start_time).getTime()).filter(t => !isNaN(t));
+    const runFinishes = runRows.map(r => new Date(r.finish_time).getTime()).filter(t => !isNaN(t));
+    const minStartMs = runStarts.length > 0 ? Math.min(...runStarts) : null;
+    const maxFinishMs = runFinishes.length > 0 ? Math.max(...runFinishes) : null;
+
+    if (minStartMs !== null && maxFinishMs !== null && maxFinishMs >= minStartMs) {
+      activityTotalSec = (maxFinishMs - minStartMs) / 1000;
+    } else {
+      activityTotalSec = runRows.reduce((acc, r) => acc + (Number(r.duration_sec) || 0), 0);
+    }
+
+    if (activityOutputSets > 0 && activityTotalSec > 0) {
+      activityTaktSec = activityTotalSec / activityOutputSets;
+    }
+
+    // 計算終點站穩態產出間隔 (第 1 組完工 ➔ 第 Q 組完工) ÷ (Q - 1)
+    let steadyIntervalSec = null;
+    const outEvs = (outputSourceStation && runStEvents[outputSourceStation]) ? runStEvents[outputSourceStation] : [];
+    if (outEvs.length >= 2) {
+      const outFinishes = outEvs.map(r => new Date(r.finish_time).getTime()).filter(t => !isNaN(t)).sort((a, b) => a - b);
+      if (outFinishes.length >= 2) {
+        steadyIntervalSec = ((outFinishes[outFinishes.length - 1] - outFinishes[0]) / 1000) / (outFinishes.length - 1);
+      }
+    }
+
+    // 更新節拍時間看板 UI
+    const elRoundTag = document.getElementById("taktRoundTag");
+    const elOutCount = document.getElementById("taktOutputCountText");
+    const elOutSub = document.getElementById("taktOutputSubText");
+    const elTotalTime = document.getElementById("taktTotalTimeText");
+    const elTimeRange = document.getElementById("taktTimeRangeText");
+    const elTaktVal = document.getElementById("taktValueText");
+    const elTaktFormula = document.getElementById("taktFormulaDetailText");
+    const elVsBottle = document.getElementById("taktVsBottleneckText");
+    const elSteady = document.getElementById("taktSteadyIntervalText");
+
+    if (elRoundTag) elRoundTag.textContent = `計算場次：${activityRoundLabel}`;
+    if (elOutCount) elOutCount.textContent = `${activityOutputSets} 組`;
+    if (elOutSub) {
+      elOutSub.innerHTML = isTerminalOutput
+        ? `🏁 終點站 <b>${outputSourceStation || '-'}</b> 實際產出組數`
+        : `⏳ 終點站 (${finalStationId}) 尚未完工，暫以 <b>${outputSourceStation}</b> (${activityOutputSets}組) 試算`;
+    }
+    if (elTotalTime) {
+      const mins = Math.floor(activityTotalSec / 60);
+      const secs = (activityTotalSec % 60).toFixed(1);
+      elTotalTime.innerHTML = `${activityTotalSec.toFixed(1)} 秒 <span style="font-size:13px; color:#64748b; font-weight:normal;">(${mins}分${secs}秒)</span>`;
+    }
+    if (elTimeRange && minStartMs && maxFinishMs) {
+      elTimeRange.textContent = `${new Date(minStartMs).toLocaleTimeString()} ➔ ${new Date(maxFinishMs).toLocaleTimeString()}`;
+    }
+    if (elTaktVal && elTaktFormula) {
+      if (activityTaktSec !== null) {
+        elTaktVal.textContent = `${activityTaktSec.toFixed(1)} 秒 / 組`;
+        elTaktFormula.textContent = `${activityTotalSec.toFixed(1)} 秒 ÷ ${activityOutputSets} 組 = 平均每 ${activityTaktSec.toFixed(1)} 秒產出 1 組`;
+      } else {
+        elTaktVal.textContent = `-- 秒 / 組`;
+        elTaktFormula.textContent = `等待產出第 1 組成品...`;
+      }
+    }
+    if (elVsBottle) {
+      if (activityTaktSec !== null && maxAvgCycle > 0) {
+        const diff = (activityTaktSec - maxAvgCycle).toFixed(1);
+        elVsBottle.innerHTML = `瓶頸站 <b>${bottleneckStation}</b> CT: <b style="color:#dc2626;">${maxAvgCycle.toFixed(1)}s</b> ｜ Cycle Time 含傳遞/首件分攤: <b>${diff >= 0 ? '+' + diff : diff}s</b>`;
+      } else {
+        elVsBottle.textContent = "--";
+      }
+    }
+    if (elSteady) {
+      if (steadyIntervalSec !== null) {
+        elSteady.innerHTML = `💡 排除首件暖線之穩態產出間隔（第1~${activityOutputSets}組）：<b>${steadyIntervalSec.toFixed(1)} 秒/組</b>`;
+      } else {
+        elSteady.textContent = `💡 完成 2 組以上成品後，將同時顯示穩態產出間隔`;
+      }
+    }
+  }
+
+  window.currentActivityTakt = {
+    roundLabel: activityRoundLabel,
+    outputSets: activityOutputSets,
+    totalSec: activityTotalSec,
+    taktSec: activityTaktSec
+  };
+
+  // 3. 渲染統計表格
+  stationKeys.forEach(station => {
+    const s = stats[station];
+    const avgCycle = s.avgCycle;
+    const avgWait = s.qty > 0 ? s.waitSum / s.qty : 0;
+    const denom = s.runSum + s.waitSum;
+    const util = denom > 0 ? (s.runSum / denom) * 100 : 0;
+
+    totalQty += s.qty;
+    totalRun += s.runSum;
+    totalWait += s.waitSum;
+
+    const isBottleneck = (station === bottleneckStation && maxAvgCycle > 0);
+    const tr = document.createElement("tr");
+    if (isBottleneck) {
+      tr.style.backgroundColor = "#fef2f2";
+      tr.style.fontWeight = "bold";
+    }
+
+    const stationDisplay = isBottleneck
+      ? `${station} <span style="background:#ef4444; color:#fff; font-size:11px; padding:2px 6px; border-radius:4px; margin-left:4px;">🚨 瓶頸站 (Max CT)</span>`
+      : station;
+
+    const partNo = getStationPart(curGroup, station);
+    const rawCfg = getStationRaw(curGroup, station, viewRound);
+    let partCell = partNo ? `<span style="color:#1e40af; font-weight:bold;">${partNo}</span>` : `<span style="color:#94a3b8;">-</span>`;
+    if (rawCfg.hasRaw && rawCfg.rawName) {
+      partCell += `<br><span style="font-size:11px; color:#b45309; font-weight:bold;">📦 含${rawCfg.rawName}</span>`;
+    }
+
+    // 計算該站平均 CT 與本次活動 Cycle Time 之比對
+    let taktCompareHtml = `<span style="color:#94a3b8;">-</span>`;
+    if (activityTaktSec !== null && activityTaktSec > 0 && avgCycle > 0) {
+      const ratioPct = ((avgCycle / activityTaktSec) * 100).toFixed(0);
+      const delta = (avgCycle - activityTaktSec).toFixed(1);
+      const sign = Number(delta) > 0 ? `+${delta}s` : `${delta}s`;
+      const color = Number(delta) > 0 ? "#dc2626" : "#0284c7";
+      taktCompareHtml = `<span style="color:${color}; font-weight:bold;">佔 Cycle Time ${ratioPct}%</span> <span style="font-size:11px; color:#64748b;">(${sign})</span>`;
+    }
+
+    const rowData = [
+      stationDisplay,
+      partCell,
+      s.qty,
+      avgCycle.toFixed(1),
+      taktCompareHtml,
+      s.runSum.toFixed(1),
+      avgWait.toFixed(1),
+      s.waitSum.toFixed(1),
+      util.toFixed(1)
+    ];
+
+    rowData.forEach((v, idx) => {
+      const td = document.createElement("td");
+      if (idx === 0 || idx === 1 || idx === 4) {
+        td.innerHTML = v;
+      } else {
+        td.textContent = v;
+      }
+      if (isBottleneck && idx === 3) {
+        td.style.color = "#dc2626";
+        td.style.fontSize = "16px";
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  // 4. 渲染全組產線整體總結列 (Line Total / Overall Summary)
+  if (stationKeys.length > 0) {
+    const sumAvgCycle = stationKeys.reduce((acc, k) => acc + stats[k].avgCycle, 0);
+    const lineBalanceEff = (maxAvgCycle > 0 && stationKeys.length > 0)
+      ? ((sumAvgCycle / (stationKeys.length * maxAvgCycle)) * 100).toFixed(1)
+      : "0.0";
+    const overallAvgWait = totalQty > 0 ? (totalWait / totalQty).toFixed(1) : "0.0";
+    const totalDenom = totalRun + totalWait;
+    const overallUtil = totalDenom > 0 ? ((totalRun / totalDenom) * 100).toFixed(1) : "0.0";
+
+    const trTotal = document.createElement("tr");
+    trTotal.style.backgroundColor = "#f1f5f9";
+    trTotal.style.borderTop = "2px solid #94a3b8";
+    trTotal.style.fontWeight = "bold";
+
+    const totalTaktCellHtml = activityTaktSec !== null
+      ? `<div style="color:#0891b2; font-size:14px; font-weight:800;">⏱️ Cycle Time: ${activityTaktSec.toFixed(1)} 秒/組</div><div style="font-size:11px; color:#64748b; font-weight:normal;">(${activityTotalSec.toFixed(1)}s ÷ ${activityOutputSets}組)</div>`
+      : `<span style="color:#94a3b8;">-</span>`;
+
+    const totalRowData = [
+      `<span style="color:#1e40af; font-size:14px; font-weight:bold;">🎯 全組產線整體 (Line Total)</span>`,
+      `<span style="color:#64748b; font-size:13px;">全線合計 / 平衡分析</span>`,
+      totalQty,
+      `<div><b>${sumAvgCycle.toFixed(1)}</b> 秒 <span style="font-size:11px; color:#64748b; font-weight:normal;">(平均 ${(sumAvgCycle / stationKeys.length).toFixed(1)}s)</span></div><div style="font-size:11px; color:#16a34a; font-weight:bold; margin-top:2px;">🎯 線平衡率: ${lineBalanceEff}%</div>`,
+      totalTaktCellHtml,
+      totalRun.toFixed(1),
+      overallAvgWait,
+      totalWait.toFixed(1),
+      `<span style="color:#0f766e; font-size:15px; font-weight:bold;">${overallUtil}%</span>`
+    ];
+
+    totalRowData.forEach((v, idx) => {
+      const td = document.createElement("td");
+      if (idx === 0 || idx === 1 || idx === 3 || idx === 4 || idx === 8) {
+        td.innerHTML = v;
+      } else {
+        td.textContent = v;
+      }
+      trTotal.appendChild(td);
+    });
+    tbody.appendChild(trTotal);
+  }
+}
+
+// 下載 CSV (含各測試場次專屬流程關係與本次生產活動 Cycle Time 摘要)
+document.getElementById("downloadBtn").onclick = () => {
+  if (currentEvents.length === 0) return;
+  const cols = ["id","group_id","round_flow_id","product_id","station_id","station_flow","part_no","wip_before_start","start_time","finish_time","duration_sec","wip_after_finish","status"];
+  const csvRows = [cols.join(",")];
+
+  currentEvents.forEach(row => {
+    const partNo = getStationPart(row.group_id, row.station_id);
+    const flowInfo = getStationFlowInfoForEvent(row);
+    const r = [
+      row.id,
+      row.group_id,
+      `"${flowInfo.flowKey || ''}"`,
+      row.product_id ?? "",
+      row.station_id,
+      `"${flowInfo.csvFlow || row.station_id || ''}"`,
+      `"${partNo || ''}"`,
+      row.wip_before_start ?? "",
+      row.start_time ?? "",
+      row.finish_time ?? "",
+      row.duration_sec ?? "",
+      row.wip_after_finish ?? "",
+      row.status
+    ];
+    csvRows.push(r.join(","));
+  });
+
+  if (window.currentActivityTakt && window.currentActivityTakt.taktSec !== null) {
+    const t = window.currentActivityTakt;
+    csvRows.push("");
+    csvRows.push("【本次生產活動 Cycle Time 統計摘要】");
+    csvRows.push("計算場次,共產出成品組數(組),該次活動總耗時(秒),本次活動 Cycle Time(秒/組)");
+    csvRows.push(`"${t.roundLabel}",${t.outputSets},${t.totalSec.toFixed(1)},${t.taktSec.toFixed(1)}`);
+  }
+
+  const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `ie_chair_data_${document.getElementById("groupSelect").value}.csv`;
+  link.click();
+};
+</script>
+</body>
+</html>
