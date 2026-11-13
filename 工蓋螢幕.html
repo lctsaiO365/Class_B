@@ -105,8 +105,8 @@
   <div class="control-bar">
     <label><strong>組別：</strong></label>
     <select id="groupSelect">
-      <option value="G01">G01</option>
-      <option value="G02" selected>G02</option>
+      <option value="G01"selected>G01</option>
+      <option value="G02" >G02</option>
       <option value="G03">G03</option>
       <option value="G04">G04</option>
       <option value="G05">G05</option>
@@ -125,6 +125,11 @@
       <option value="G18">G18</option>
       <option value="G19">G19</option>
       <option value="G20">G20</option>
+      <option value="G21">G21</option>
+      <option value="G22">G22</option>
+      <option value="G23">G23</option>
+      <option value="G24">G24</option>
+      <option value="G25">G25</option>
       <option value="ALL">全部組別 (僅表格)</option>
     </select>
     <button id="bindGroupUrlBtn" type="button" onclick="bindCurrentGroupUrl()" style="padding:6px 10px; font-size:12px; font-weight:bold; border-radius:8px; border:1px solid #93c5fd; background:#eff6ff; color:#1d4ed8; cursor:pointer;" title="將此視窗與網址永久鎖定為目前選取的組別（鎖定後即使解鎖管理員也無法切換組別）">
@@ -1320,7 +1325,7 @@ function openGroupLinksModal() {
     baseHint.innerHTML = `🌐 目前網站根目錄：<code>${baseDir}</code>`;
   }
   container.innerHTML = "";
-  for (let i = 1; i <= 20; i++) {
+  for (let i = 1; i <= 25; i++) {
     const g = `G${String(i).padStart(2, "0")}`;
     const screenUrl = `${baseDir}工蓋螢幕.html?group=${g}&lock=1`;
     const qrUrl = `${baseDir}qrcode.html?group=${g}&lock=1`;
