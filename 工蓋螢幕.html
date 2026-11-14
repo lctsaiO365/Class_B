@@ -105,8 +105,8 @@
   <div class="control-bar">
     <label><strong>組別：</strong></label>
     <select id="groupSelect">
-      <option value="G01"selected>G01</option>
-      <option value="G02" >G02</option>
+      <option value="G01" selected>G01</option>
+      <option value="G02">G02</option>
       <option value="G03">G03</option>
       <option value="G04">G04</option>
       <option value="G05">G05</option>
@@ -211,19 +211,6 @@
           <option value="3">3 秒</option>
           <option value="4" selected>4 秒</option>
           <option value="5">5 秒</option>
-        </select>
-        <span style="border-left:1px solid #93c5fd; height:14px; margin:0 2px;"></span>
-        <span style="font-size:12px; color:#7e22ce; font-weight:bold;">📦 站間 WIP 上限:</span>
-        <select id="systemMaxWipSelect" onchange="changeSystemCooldown()" style="padding:2px 6px; font-size:12px; font-weight:bold; color:#7e22ce; border-radius:4px; border:1px solid #d8b4fe; background:#fff; cursor:pointer;" title="限制各工站之間的在製品(WIP)最大暫存件數，過滿時自動阻擋禁止再開工或加料（僅管理員可更改）">
-          <option value="0" selected>無限制 (∞)</option>
-          <option value="1">1 件 (單件流)</option>
-          <option value="2">2 件</option>
-          <option value="3">3 件</option>
-          <option value="4">4 件</option>
-          <option value="5">5 件</option>
-          <option value="6">6 件</option>
-          <option value="8">8 件</option>
-          <option value="10">10 件</option>
         </select>
       </div>
       <button id="groupLinksModalBtn" onclick="openGroupLinksModal()" style="display:none; padding:6px 12px; font-size:12px; font-weight:bold; border-radius:8px; border:1px solid #0284c7; background:#e0f2fe; color:#0369a1; cursor:pointer;" title="產生並複製 G01~G20 各組專屬工蓋螢幕與 QR Code 連結">
@@ -634,11 +621,11 @@ let isSwitchingModeOrRound = false;  // 切換確認進行中鎖定旗標
 let lastLocalModeChangeAt = 0;       // 最近一次本地確認切換時間戳，防止非同步重整舊值覆蓋
 let currentCooldownSec = parseInt(localStorage.getItem("ie_chair_cooldown_sec") || "3", 10) || 3; // 開工防呆 1~5 秒
 let currentFinishCooldownSec = parseInt(localStorage.getItem("ie_chair_finish_cooldown_sec") || "4", 10) || 4; // 完工冷卻/起始間隔 1~5 秒 (預設 4 秒，即 3~5 秒)
-let currentMaxWip = Math.max(0, parseInt(localStorage.getItem("ie_chair_max_wip") || "0", 10) || 0); // 站間 WIP 上限 (0=無限制, 1~99=上限件數)
+let currentMaxWip = 0; // 已改由各工站獨立設定半成品 WIP 上限，不再使用全體一致預設值
 let currentTableFilter = "ALL"; // ALL, OFFICIAL, TEST
 let currentTestRoundFilter = "ALL_TEST"; // ALL_TEST, or "1"~"10"
 
-// 編碼與解碼 SYSTEM_MODE 雲端欄位 (input_wip: 1=正式, 101~110=第1~10次測試; output_wip: WIP上限*10000 + 開工防呆*100 + 完工冷卻)
+// 編碼與解碼 SYSTEM_MODE 雲端欄位 (input_wip: 1=正式, 101~110=第1~10次測試; output_wip: 開工防呆*100 + 完工冷卻)
 function encodeSystemModeInput(mode, round) {
   return mode === 1 ? 1 : (100 + Math.min(10, Math.max(1, parseInt(round, 10) || 1)));
 }
@@ -648,22 +635,20 @@ function decodeSystemModeInput(val) {
   if (n >= 101 && n <= 110) return { mode: 0, round: n - 100 };
   return { mode: 0, round: 1 };
 }
-function encodeSystemCooldownOutput(startCd, finishCd, maxWip) {
+function encodeSystemCooldownOutput(startCd, finishCd) {
   const s = Math.min(5, Math.max(1, parseInt(startCd, 10) || 3));
   const f = Math.min(5, Math.max(1, parseInt(finishCd, 10) || 4));
-  const m = Math.min(99, Math.max(0, parseInt(maxWip !== undefined ? maxWip : currentMaxWip, 10) || 0));
-  return m * 10000 + s * 100 + f;
+  return s * 100 + f;
 }
 function decodeSystemCooldownOutput(val) {
   const n = parseInt(val, 10) || 304;
-  const m = Math.min(99, Math.max(0, Math.floor(n / 10000)));
   const rem = n % 10000;
   if (rem >= 100) {
     const s = Math.min(5, Math.max(1, Math.floor(rem / 100)));
     const f = Math.min(5, Math.max(1, rem % 100));
-    return { startCd: s, finishCd: f, maxWip: m };
+    return { startCd: s, finishCd: f, maxWip: 0 };
   }
-  return { startCd: Math.min(5, Math.max(1, rem || 3)), finishCd: currentFinishCooldownSec || 4, maxWip: m };
+  return { startCd: Math.min(5, Math.max(1, rem || 3)), finishCd: currentFinishCooldownSec || 4, maxWip: 0 };
 }
 
 // 判斷 product_id 是否為測試紀錄，以及屬於第幾次測試 (1~10)
@@ -694,12 +679,10 @@ function updateModeButtonsUI() {
   const readonlyBadge = document.getElementById("readonlyModeBadge");
   const cdSelect = document.getElementById("systemCooldownSelect");
   const fcdSelect = document.getElementById("systemFinishCooldownSelect");
-  const mwSelect = document.getElementById("systemMaxWipSelect");
 
   if (cdSelect) cdSelect.value = currentCooldownSec;
   if (fcdSelect) fcdSelect.value = currentFinishCooldownSec;
-  if (mwSelect) mwSelect.value = String(currentMaxWip);
-  const wipLimitText = currentMaxWip > 0 ? `｜WIP上限:${currentMaxWip}件` : "";
+  const wipLimitText = "";
   if (roundSelect && document.activeElement !== roundSelect) {
     // 若使用者剛在選單選了第 N 次測試準備按確認，保留使用者選中的值，絕不跳回第 1 次
     const displayRound = (pendingSelectedTestRound !== null) ? pendingSelectedTestRound : currentTestRound;
@@ -782,10 +765,9 @@ async function upsertSystemModeCloud(modeVal, roundVal, startCdVal, finishCdVal,
           body: JSON.stringify({ group_id: grp, station_id: "GROUP_MODE", input_wip: inVal, output_wip: outVal })
         });
       }
-      return;
     }
 
-    // 2. 全組總覽模式 (ALL)：寫入全域預設 SYSTEM_MODE
+    // 2. 同步更新全域 SYSTEM_MODE (確保雲端 GitHub Pages 上的 timer.html 掃碼時也能立即讀到最新場次)
     const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/station_wip?station_id=eq.SYSTEM_MODE&select=id`, {
       headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
     });
@@ -806,35 +788,106 @@ async function upsertSystemModeCloud(modeVal, roundVal, startCdVal, finishCdVal,
   } catch (e) {}
 }
 
-// 重置指定組別的 station_wip 在製品庫存 (回到該場次初始設定備料 subInit / rawInit，保留歷史 event 數據，且排除 SYSTEM_MODE 與 GROUP_MODE)
+// 輔助函式：安全新增或更新指定 group_id (如 G20 或 G20-T2) 的 station_wip 資料列
+async function upsertCloudWipRecord(targetGrp, stId, inVal, outVal, keepExistingOut = false) {
+  if (!targetGrp || !stId) return;
+  try {
+    const checkRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(targetGrp)}&station_id=eq.${encodeURIComponent(stId)}&select=id,input_wip,output_wip`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY } }
+    );
+    const existing = await checkRes.json();
+    if (Array.isArray(existing) && existing.length > 0) {
+      await fetch(`${SUPABASE_URL}/rest/v1/station_wip?id=eq.${existing[0].id}`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input_wip: inVal,
+          output_wip: keepExistingOut ? (existing[0].output_wip || 0) : outVal,
+          updated_at: new Date().toISOString()
+        })
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/station_wip`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          group_id: targetGrp,
+          station_id: stId,
+          input_wip: inVal,
+          output_wip: outVal
+        })
+      });
+    }
+  } catch (e) {}
+}
+
+// 重置指定組別的 station_wip 在製品庫存 (僅針對開啟之該場次代號如 G20-T2 單一寫入，不自動無中生有產生 G20-T1、也不重複寫入無後綴的 G20)
 async function resetGroupWipForNewRound(group, viewRound) {
   if (!group || group === "ALL") return;
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=not.in.(SYSTEM_MODE,GROUP_MODE)`, {
+    const flowKey = getFlowKeyForRound(group, viewRound);
+    if (!flowKey) return;
+
+    // 1. 確保雲端 station_flow 僅建立目前開啟之該場次 (flowKey，如 G20-T2) 的流程紀錄，並清理無後綴的重複 group 紀錄
+    try {
+      const chkFlow = await fetch(`${SUPABASE_URL}/rest/v1/station_flow?group_id=eq.${encodeURIComponent(flowKey)}&select=id`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+      });
+      const existFlow = await chkFlow.json();
+      if (!Array.isArray(existFlow) || existFlow.length === 0) {
+        const baseFlow = (window.cachedGroupFlows && (window.cachedGroupFlows[flowKey] || window.cachedGroupFlows[group])) || [];
+        if (baseFlow.length > 0) {
+          const roundFlowPayload = baseFlow.map(item => ({
+            group_id: flowKey,
+            station_id: item.station_id,
+            station_name: item.station_name || item.station_id,
+            next_station_id: item.next_station_id || null
+          }));
+          localStorage.setItem(`ie_chair_flow_backup_${flowKey}`, JSON.stringify(roundFlowPayload));
+          await fetch(`${SUPABASE_URL}/rest/v1/station_flow`, {
+            method: "POST",
+            headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
+            body: JSON.stringify(roundFlowPayload)
+          });
+        }
+      }
+      if (flowKey !== group) {
+        await fetch(`${SUPABASE_URL}/rest/v1/station_flow?group_id=eq.${encodeURIComponent(group)}`, {
+          method: "DELETE",
+          headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+        });
+      }
+    } catch (e) {}
+
+    // 2. 清理無後綴 group 在 station_wip 的重複工站資料列 (僅保留 GROUP_MODE / SYSTEM_MODE)，並重置當前開啟場次 flowKey 的庫存
+    if (flowKey !== group) {
+      await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=not.in.(SYSTEM_MODE,GROUP_MODE)`, {
+        method: "DELETE",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+      });
+    }
+    await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(flowKey)}&station_id=not.in.(SYSTEM_MODE,GROUP_MODE)&station_id=not.like.*_LIMIT`, {
       method: "PATCH",
       headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({ input_wip: 0, output_wip: 0, updated_at: new Date().toISOString() })
     });
+
     const allRaw = JSON.parse(localStorage.getItem("ie_chair_group_station_raw") || "{}");
-    const flowKey = getFlowKeyForRound(group, viewRound);
     const groupRaw = (flowKey && allRaw[flowKey]) ? allRaw[flowKey] : (allRaw[group] || {});
     for (const [stKey, cfg] of Object.entries(groupRaw)) {
       if (!cfg) continue;
       const initSub = (!cfg.isRoot && cfg.subInit !== undefined && cfg.subInit !== null)
         ? Math.max(0, parseInt(cfg.subInit, 10) || 0)
         : 0;
-      await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=eq.${encodeURIComponent(stKey)}`, {
-        method: "PATCH",
-        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ input_wip: initSub, output_wip: 0, updated_at: new Date().toISOString() })
-      });
+      await upsertCloudWipRecord(flowKey, stKey, initSub, 0, false);
+      if (!cfg.isRoot && cfg.maxWip !== undefined && cfg.maxWip !== null) {
+        const stLim = Math.max(0, parseInt(cfg.maxWip, 10) || 0);
+        await upsertCloudWipRecord(flowKey, `${stKey}_LIMIT`, stLim, 0, false);
+      }
       if (cfg.hasRaw) {
         const initRaw = Math.max(0, parseInt(cfg.rawInit, 10) || 0);
-        await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=eq.${encodeURIComponent(stKey + "_RAW")}`, {
-          method: "PATCH",
-          headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
-          body: JSON.stringify({ input_wip: initRaw, output_wip: 0, updated_at: new Date().toISOString() })
-        });
+        await upsertCloudWipRecord(flowKey, `${stKey}_RAW`, initRaw, 0, false);
       }
     }
   } catch (e) {}
@@ -952,10 +1005,10 @@ async function changeSystemMode(newMode) {
   loadAll();
 }
 
-// 管理員專屬：修改開工防呆秒數、完工冷卻/起始間隔秒數與站間 WIP 上限
+// 管理員專屬：修改開工防呆秒數与完工冷卻/起始間隔秒數
 async function changeSystemCooldown() {
   if (!isAdminLoggedIn) {
-    alert("⚠️ 權限不足：防呆、冷卻時間與 WIP 上限僅限管理員修改！");
+    alert("⚠️ 權限不足：防呆與冷卻時間僅限管理員修改！");
     updateModeButtonsUI();
     return;
   }
@@ -963,14 +1016,13 @@ async function changeSystemCooldown() {
 
   const cdSelect = document.getElementById("systemCooldownSelect");
   const fcdSelect = document.getElementById("systemFinishCooldownSelect");
-  const mwSelect = document.getElementById("systemMaxWipSelect");
   currentCooldownSec = Math.min(5, Math.max(1, parseInt(cdSelect ? cdSelect.value : "3", 10) || 3));
   currentFinishCooldownSec = Math.min(5, Math.max(1, parseInt(fcdSelect ? fcdSelect.value : "4", 10) || 4));
-  currentMaxWip = Math.min(99, Math.max(0, parseInt(mwSelect ? mwSelect.value : "0", 10) || 0));
+  currentMaxWip = 0;
 
   localStorage.setItem("ie_chair_cooldown_sec", String(currentCooldownSec));
   localStorage.setItem("ie_chair_finish_cooldown_sec", String(currentFinishCooldownSec));
-  localStorage.setItem("ie_chair_max_wip", String(currentMaxWip));
+  localStorage.removeItem("ie_chair_max_wip");
   updateModeButtonsUI();
 
   await upsertSystemModeCloud(currentSystemMode, currentTestRound, currentCooldownSec, currentFinishCooldownSec);
@@ -1311,7 +1363,7 @@ function getSiteDirBaseUrl() {
       return loc.substring(0, loc.lastIndexOf("/") + 1);
     }
   } catch (e) {}
-  return "https://lctsaio365.github.io/Class_B/qrcode.html/";
+  return "https://lctsaio365.github.io/Class_B/timer.html/";
 }
 
 function openGroupLinksModal() {
@@ -1354,7 +1406,7 @@ function closeGroupLinksModal() {
 function copyAllGroupLinks() {
   const baseDir = getSiteDirBaseUrl();
   const lines = ["【IE Chair 各組專屬工蓋螢幕監控網址 (內附前往該組 QR Code 連結)】"];
-  for (let i = 1; i <= 20; i++) {
+  for (let i = 1; i <= 25; i++) {
     const g = `G${String(i).padStart(2, "0")}`;
     lines.push(`${g} 專屬看板：${baseDir}工蓋螢幕.html?group=${g}&lock=1`);
   }
@@ -1546,6 +1598,35 @@ async function fetchAndResolveFlowsForRound(group, viewRound) {
   Object.keys(byKey).forEach(k => {
     window.cachedGroupFlows[k] = byKey[k];
   });
+
+  // 若目前開啟之場次 flowKey 已有紀錄，自動清理無後綴的重複 group 紀錄；若尚未有 flowKey 且有舊版無後綴 group 紀錄，自動遷移至 flowKey 並清理
+  if (vr.isLive && flowKey && flowKey !== group && byKey[group] && byKey[group].length > 0) {
+    if (byKey[flowKey] && byKey[flowKey].length > 0) {
+      fetch(`${SUPABASE_URL}/rest/v1/station_flow?group_id=eq.${encodeURIComponent(group)}`, {
+        method: "DELETE",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+      }).catch(() => {});
+    } else {
+      const migrated = byKey[group].map(item => ({
+        group_id: flowKey,
+        station_id: item.station_id,
+        station_name: item.station_name || item.station_id,
+        next_station_id: item.next_station_id || null
+      }));
+      byKey[flowKey] = migrated;
+      window.cachedGroupFlows[flowKey] = migrated;
+      fetch(`${SUPABASE_URL}/rest/v1/station_flow`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify(migrated)
+      }).then(() => {
+        fetch(`${SUPABASE_URL}/rest/v1/station_flow?group_id=eq.${encodeURIComponent(group)}`, {
+          method: "DELETE",
+          headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+  }
 
   // 候選查找順序：1. 該場次專屬 flowKey -> 2. 前序測試場次 -> 3. 組別基準 group
   const candidateKeys = [flowKey];
@@ -1797,7 +1878,7 @@ async function renderFlowDiagram(group, forceRender = false) {
 
   const [flows, wipRes] = await Promise.all([
     fetchAndResolveFlowsForRound(group, viewRound),
-    fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${group}`, {
+    fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=in.(${encodeURIComponent(group)},${encodeURIComponent(flowKey)})`, {
       headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
     })
   ]);
@@ -1841,8 +1922,39 @@ async function renderFlowDiagram(group, forceRender = false) {
     if (st) roundOutMap[st] = (roundOutMap[st] || 0) + 1;
   });
 
+  // 優先整理場次專屬 flowKey (如 G20-T2) 的 station_wip 資料；若有舊版無後綴 group 資料則自動遷移至 flowKey 並清除重複列
+  const baseWips = wips.filter(w => (w.group_id || "").trim() === group && w.station_id !== "SYSTEM_MODE" && w.station_id !== "GROUP_MODE");
+  const roundWips = wips.filter(w => (w.group_id || "").trim() === flowKey);
+
+  if (viewRound.isLive && flowKey && flowKey !== group && baseWips.length > 0) {
+    if (roundWips.length === 0) {
+      const syncRows = baseWips.map(r => ({
+        group_id: flowKey,
+        station_id: r.station_id,
+        input_wip: r.input_wip || 0,
+        output_wip: roundOutMap[(r.station_id || "").trim()] ?? (r.output_wip || 0)
+      }));
+      fetch(`${SUPABASE_URL}/rest/v1/station_wip`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify(syncRows)
+      }).then(() => {
+        fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=not.in.(SYSTEM_MODE,GROUP_MODE)`, {
+          method: "DELETE",
+          headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+        }).catch(() => {});
+      }).catch(() => {});
+    } else {
+      fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=not.in.(SYSTEM_MODE,GROUP_MODE)`, {
+        method: "DELETE",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+      }).catch(() => {});
+    }
+  }
+
   const wipMap = {};
-  wips.forEach(w => {
+  const orderedWips = [...baseWips, ...roundWips];
+  orderedWips.forEach(w => {
     const stKey = (w.station_id || "").trim();
     wipMap[stKey] = {
       inWip: w.input_wip || 0,
@@ -1898,9 +2010,9 @@ async function renderFlowDiagram(group, forceRender = false) {
       ? cfgSub
       : ((!isRoot && w.outWip === 0 && hasCfgSub) ? cfgSub : Math.max(w.inWip || 0, cfgSub));
 
-    // 若為目前進行中場次、尚未開工且雲端 input_wip 與設定值不同，自動背景同步至雲端資料庫
+    // 若為目前進行中場次、尚未開工且雲端 input_wip 與設定值不同，自動背景同步至雲端資料庫 (僅更新 flowKey)
     if (viewRound.isLive && !isRoot && w.outWip === 0 && hasCfgSub && (w.inWip || 0) !== cfgSub) {
-      fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=eq.${encodeURIComponent(stId)}`, {
+      fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(flowKey)}&station_id=eq.${encodeURIComponent(stId)}`, {
         method: "PATCH",
         headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
         body: JSON.stringify({ input_wip: cfgSub, updated_at: new Date().toISOString() })
@@ -1935,12 +2047,29 @@ async function renderFlowDiagram(group, forceRender = false) {
       }
     }
 
-    // 2. 計算【站後在庫量】: 本站完工 - 下游站自本站領取之消耗量
+    // 2. 計算【本站站前半成品 WIP 上限 (myInMaxWip)】與【站後送往下游之半成品在庫量 (currentOutBuffer) / 下游滿載阻塞 (isWipBlocked)】
+    // 優先讀取雲端 `${stId}_LIMIT` (讓各站手機或 QR 頁修改後立即生效)，其次讀取本機 rawCfg.maxWip，最後回退預設 currentMaxWip
+    function resolveStationSemiFinishedLimit(targetSt) {
+      if (wipMap[targetSt + "_LIMIT"] !== undefined) {
+        return Math.max(0, parseInt(wipMap[targetSt + "_LIMIT"].inWip, 10) || 0);
+      }
+      const tCfg = getStationRaw(group, targetSt, viewRound);
+      if (tCfg && tCfg.maxWip !== undefined && tCfg.maxWip !== null && tCfg.maxWip !== "") {
+        return Math.max(0, parseInt(tCfg.maxWip, 10) || 0);
+      }
+      return currentMaxWip;
+    }
+
+    const myInMaxWip = isRoot ? 0 : resolveStationSemiFinishedLimit(stId);
     const isFinalStation = successors.length === 0;
     let currentOutBuffer = w.outWip;
+    let effectiveDownMaxWip = 0;
+    let blockedByDownSt = "";
+    let isWipBlocked = false;
 
     if (!isFinalStation) {
-      let downstreamConsumed = 0;
+      let maxBuf = 0;
+      let chosenLim = 0;
       successors.forEach(s => {
         const sWip = wipMap[s] || { inWip: 0, outWip: 0 };
         const sRawCfg = getStationRaw(group, s, viewRound);
@@ -1948,27 +2077,50 @@ async function renderFlowDiagram(group, forceRender = false) {
         const sCfgSub = sHasCfgSub ? Math.max(0, parseInt(sRawCfg.subInit, 10) || 0) : 0;
         const sManualAdded = (sWip.outWip === 0 && sHasCfgSub) ? sCfgSub : Math.max(sWip.inWip || 0, sCfgSub);
         const sFeederConsumed = Math.max(0, (sWip.outWip || 0) - sManualAdded);
-        if (sFeederConsumed > downstreamConsumed) downstreamConsumed = sFeederConsumed;
+        const sRemManual = Math.max(0, sManualAdded - (sWip.outWip || 0));
+        const sBuf = Math.max(0, w.outWip - sFeederConsumed) + sRemManual;
+        const sLim = resolveStationSemiFinishedLimit(s);
+
+        if (sBuf >= maxBuf) {
+          maxBuf = sBuf;
+          chosenLim = sLim;
+        } else if (chosenLim === 0 && sLim > 0) {
+          chosenLim = sLim;
+        }
+
+        if (sLim > 0 && sBuf >= sLim && !blockedByDownSt) {
+          isWipBlocked = true;
+          blockedByDownSt = s;
+          currentOutBuffer = sBuf;
+          effectiveDownMaxWip = sLim;
+        }
       });
-      currentOutBuffer = Math.max(0, w.outWip - downstreamConsumed);
+      if (!isWipBlocked) {
+        currentOutBuffer = maxBuf;
+        effectiveDownMaxWip = chosenLim;
+        blockedByDownSt = successors[0] || "";
+      }
     }
 
-    // 3. 節點標籤呈現
+    // 3. 節點標籤呈現 (WIP 上限僅顯示並套用於「前一站是半成品進入」之工站，零件進入不受限)
+    const subUnit = isMerge ? "套" : "件";
+    const subLimitStr = myInMaxWip > 0 ? `/${myInMaxWip}${subUnit}${totalSub >= myInMaxWip ? '(🛑滿)' : ''}` : `${subUnit}`;
     let inText = "";
     if (isRoot) {
-      inText = "📥 原料: 無限供應";
+      inText = "📥 原料/零件: 無限供應 (無WIP限制)";
     } else if (hasRaw) {
-      inText = (hasRaw && rawName) ? `📥 半成品: ${totalSub}套 ｜ ${rawName}: ${rawStock}件 ➔ 可開工: ${inQty}套` : `📥 半成品: ${totalSub}套 ➔ 可開工: ${inQty}套`;
+      inText = (hasRaw && rawName)
+        ? `📥 半成品: ${totalSub}${subLimitStr} ｜ ${rawName}: ${rawStock}顆(零件不限) ➔ 可開工: ${inQty}套`
+        : `📥 半成品: ${totalSub}${subLimitStr} ➔ 可開工: ${inQty}套`;
     } else {
-      inText = `📥 半成品: ${totalSub}${isMerge ? '套' : '件'} ➔ 可開工: ${inQty}${isMerge ? '套' : '件'}`;
+      inText = `📥 半成品: ${totalSub}${subLimitStr} ➔ 可開工: ${inQty}${subUnit}`;
     }
 
-    const isWipBlocked = (!isFinalStation && currentMaxWip > 0 && currentOutBuffer >= currentMaxWip);
     let outText = "";
     if (isFinalStation) {
       outText = `🏁 總成品: ${w.outWip} 件`;
-    } else if (currentMaxWip > 0) {
-      outText = `📤 累計完工: ${w.outWip} 件 (站後待領: ${currentOutBuffer}/${currentMaxWip} 件${isWipBlocked ? ' 🛑已滿' : ''})`;
+    } else if (effectiveDownMaxWip > 0) {
+      outText = `📤 累計完工: ${w.outWip} 件 (送往${blockedByDownSt}待領: ${currentOutBuffer}/${effectiveDownMaxWip} 件${isWipBlocked ? ' 🛑已滿' : ''})`;
     } else {
       outText = `📤 累計完工: ${w.outWip} 件 (站後待領: ${currentOutBuffer} 件)`;
     }
@@ -1981,7 +2133,7 @@ async function renderFlowDiagram(group, forceRender = false) {
 
     const isBottleneck = (stId === window.currentBottleneckStation && window.currentMaxCycle > 0);
     const bottleneckTag = isBottleneck ? `<br><b style='color:#dc2626;'>🚨 瓶頸站 (CT: ${window.currentMaxCycle.toFixed(1)}s)</b>` : "";
-    const blockedTag = isWipBlocked ? `<br><b style='color:#7e22ce;'>🛑 滿載阻塞 (WIP已達上限 ${currentMaxWip} 件)</b>` : "";
+    const blockedTag = isWipBlocked ? `<br><b style='color:#7e22ce;'>🛑 滿載阻塞 (下游${blockedByDownSt}半成品已達上限 ${effectiveDownMaxWip} 件)</b>` : "";
 
     code += `  ${stId}["<b>${stId}</b>${partTag}<br>${inText}<br>${outText}${blockedTag}${bottleneckTag}"]\n`;
 
@@ -2114,6 +2266,11 @@ function refreshModalRawConfigs(group) {
     if (!tempValues[st]) tempValues[st] = {};
     tempValues[st].subInit = inp.value !== "" ? parseInt(inp.value, 10) : 0;
   });
+  rawContainer.querySelectorAll(".modal-max-wip").forEach(sel => {
+    const st = sel.dataset.station;
+    if (!tempValues[st]) tempValues[st] = {};
+    tempValues[st].maxWip = sel.value !== "" ? parseInt(sel.value, 10) : 0;
+  });
   rawContainer.querySelectorAll(".modal-raw-check").forEach(chk => {
     const st = chk.dataset.station;
     const isChecked = chk.checked;
@@ -2153,30 +2310,37 @@ function refreshModalRawConfigs(group) {
       div.innerHTML = `
         <div style="display:flex; align-items:center; gap:8px;">
           <span style="font-weight:bold; color:#166534; font-size:14px;">🏁 ${st} 起始工站</span>
-          <span style="font-size:12px; color:#15803d; background:#dcfce7; padding:2px 8px; border-radius:6px; font-weight:600;">🟢 原料無限供應（常駐充足，隨時可開工）</span>
+          <span style="font-size:12px; color:#15803d; background:#dcfce7; padding:2px 8px; border-radius:6px; font-weight:600;">🟢 原料/零件直接進入（無前置半成品，不適用 WIP 上限限制）</span>
         </div>
         <span style="background:#bbf7d0; color:#14532d; font-size:11px; font-weight:bold; padding:3px 10px; border-radius:12px; border:1px solid #86efac; white-space:nowrap;">原料無限 ∞</span>
       `;
     } else {
       const subInitVal = (savedCfg.subInit !== undefined && savedCfg.subInit !== null) ? Math.max(0, parseInt(savedCfg.subInit, 10) || 0) : 0;
+      const maxWipVal = (savedCfg.maxWip !== undefined && savedCfg.maxWip !== null) ? Math.max(0, parseInt(savedCfg.maxWip, 10) || 0) : 0;
+      const maxWipOpts = [0, 1, 2, 3, 4, 5, 6, 8, 10].map(v =>
+        `<option value="${v}" ${maxWipVal === v ? "selected" : ""}>${v === 0 ? "無限制 (∞)" : `${v} 套 (滿載阻擋)`}</option>`
+      ).join("");
       div.style.cssText = "background:#fff; border:1px solid #fcd34d; border-radius:8px; padding:10px 14px; display:flex; flex-direction:column; gap:8px; box-sizing:border-box;";
       div.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-weight:bold; color:#1e293b; font-size:13px;">🧩 ${st} 後續工站</span>
+          <span style="font-weight:bold; color:#1e293b; font-size:13px;">🧩 ${st} 後續工站（前一站是半成品進入）</span>
           <span style="font-size:11px; color:#b45309; background:#fef3c7; padding:2px 8px; border-radius:4px; font-weight:bold; border:1px solid #fde68a;">需前置工站：${preds.join(" + ")}</span>
         </div>
         <div style="display:flex; align-items:center; gap:8px; background:#fffbeb; padding:6px 10px; border-radius:6px; border:1px solid #fef08a; flex-wrap:wrap;">
-          <span style="font-size:12px; font-weight:bold; color:#92400e; white-space:nowrap;">📦 站前半成品初始備料（選填，可為 0）：</span>
+          <span style="font-size:12px; font-weight:bold; color:#92400e; white-space:nowrap;">📦 站前半成品初始備料：</span>
           <div style="display:inline-flex; align-items:center; background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:0 6px; box-sizing:border-box;">
             <input type="number" id="modalSubInit_${st}" class="modal-sub-init" data-station="${st}" value="${subInitVal}" min="0" placeholder="0" style="border:none; outline:none; width:45px; padding:4px 0; font-size:13px; text-align:right; font-weight:bold; color:#1e40af;">
             <span style="font-size:11px; font-weight:bold; color:#92400e; margin-left:3px; white-space:nowrap;">套</span>
           </div>
-          <span style="font-size:11px; color:#64748b;">(可設為 0 或任意套數；設定後流程圖與計時器立即同步)</span>
+          <span style="font-size:12px; font-weight:bold; color:#7e22ce; white-space:nowrap; margin-left:6px;">🛑 本站半成品 WIP 上限：</span>
+          <select id="modalMaxWip_${st}" class="modal-max-wip" data-station="${st}" style="padding:4px 8px; font-size:12px; font-weight:bold; color:#7e22ce; border:1px solid #d8b4fe; border-radius:6px; background:#faf5ff; cursor:pointer;">
+            ${maxWipOpts}
+          </select>
         </div>
         <div style="display:flex; align-items:center; gap:6px;">
           <input type="checkbox" id="modalRawCheck_${st}" class="modal-raw-check" data-station="${st}" ${hasRaw ? "checked" : ""} style="cursor:pointer; width:14px; height:14px; margin:0;">
           <label for="modalRawCheck_${st}" style="font-size:12px; color:#475569; cursor:pointer; margin:0; font-weight:600;">
-            ＋ 附加站前專屬零件 (選填，如螺絲料盒)
+            ＋ 附加站前專屬零件 (選填，如螺絲料盒；零件進入不受 WIP 上限限制)
           </label>
         </div>
         <div id="modalRawBox_${st}" style="display:${hasRaw ? 'flex' : 'none'}; align-items:center; gap:6px; margin-left:20px; font-size:12px; flex-wrap:wrap; background:#f8fafc; padding:6px 10px; border-radius:6px; border:1px solid #e2e8f0;">
@@ -2290,10 +2454,15 @@ async function saveCustomFlow() {
     const isRoot = preds.length === 0;
 
     let subInitVal = 0;
+    let maxWipVal = 0;
     if (!isRoot) {
       const subInp = document.getElementById(`modalSubInit_${st}`);
       const parsed = (subInp && subInp.value !== "") ? parseInt(subInp.value, 10) : 0;
       subInitVal = (!isNaN(parsed) && parsed >= 0) ? parsed : 0;
+
+      const maxSel = document.getElementById(`modalMaxWip_${st}`);
+      const parsedMax = (maxSel && maxSel.value !== "") ? parseInt(maxSel.value, 10) : 0;
+      maxWipVal = (!isNaN(parsedMax) && parsedMax >= 0) ? parsedMax : 0;
     }
 
     const chk = document.getElementById(`modalRawCheck_${st}`);
@@ -2304,6 +2473,7 @@ async function saveCustomFlow() {
     newGroupRaw[st] = {
       isRoot: isRoot,
       subInit: isRoot ? 0 : subInitVal,
+      maxWip: isRoot ? 0 : maxWipVal,
       hasRaw: hasRaw,
       rawName: (hasRaw && nameInput) ? nameInput.value.trim() : "",
       rawInit: rawInitStr !== "" ? (parseInt(rawInitStr, 10) || 0) : ""
@@ -2316,37 +2486,21 @@ async function saveCustomFlow() {
   localStorage.setItem("ie_chair_group_station_raw", JSON.stringify(allRaw));
 
   try {
-    // 🛡️ 若目前修改的是第 2~10 次測試或正式實作，且第 1 次測試 (`${group}-T1`) 尚未獨立封存，先將原本舊的 `${group}` 流程自動快照封存至 `${group}-T1`，確保第 1 次測試流程圖 100% 不被覆蓋！
-    if (flowKey !== `${group}-T1`) {
-      const t1Key = `${group}-T1`;
-      const existingT1 = window.cachedGroupFlows && window.cachedGroupFlows[t1Key];
-      const existingBase = window.cachedGroupFlows && window.cachedGroupFlows[group];
-      if ((!existingT1 || existingT1.length === 0) && Array.isArray(existingBase) && existingBase.length > 0) {
-        const t1Snapshot = existingBase.map(item => ({
-          group_id: t1Key,
-          station_id: item.station_id,
-          station_name: item.station_name || item.station_id,
-          next_station_id: item.next_station_id || null
-        }));
-        localStorage.setItem(`ie_chair_flow_backup_${t1Key}`, JSON.stringify(t1Snapshot));
-        await fetch(`${SUPABASE_URL}/rest/v1/station_flow?group_id=eq.${encodeURIComponent(t1Key)}`, {
-          method: "DELETE",
-          headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
-        });
-        await fetch(`${SUPABASE_URL}/rest/v1/station_flow`, {
-          method: "POST",
-          headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
-          body: JSON.stringify(t1Snapshot)
-        });
-      }
-    }
-
-    // 🛡️ 寫入該場次專屬的本地備份與雲端 station_flow (group_id = flowKey)
+    // 🛡️ 僅寫入當前開啟之該場次專屬 station_flow (group_id = flowKey，例如 G20-T2)，不自動產生未開啟之場次，並清理無後綴的重複 group 紀錄
     localStorage.setItem(`ie_chair_flow_backup_${flowKey}`, JSON.stringify(payload));
+    if (viewRound.isLive) {
+      localStorage.setItem(`ie_chair_flow_backup_${group}`, JSON.stringify(payload));
+    }
     await fetch(`${SUPABASE_URL}/rest/v1/station_flow?group_id=eq.${encodeURIComponent(flowKey)}`, {
       method: "DELETE",
       headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
     });
+    if (flowKey !== group) {
+      await fetch(`${SUPABASE_URL}/rest/v1/station_flow?group_id=eq.${encodeURIComponent(group)}`, {
+        method: "DELETE",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+      });
+    }
     const postRes = await fetch(`${SUPABASE_URL}/rest/v1/station_flow`, {
       method: "POST",
       headers: {
@@ -2361,23 +2515,6 @@ async function saveCustomFlow() {
       throw new Error(`雲端寫入失敗 (${postRes.status}): ${errText}`);
     }
 
-    // 若編輯的是當前進行中的場次，同步更新基準 group_id，讓現場手機與桌牌頁面也能無縫取得最新場次流程
-    if (viewRound.isLive) {
-      localStorage.setItem(`ie_chair_flow_backup_${group}`, JSON.stringify(basePayload));
-      await fetch(`${SUPABASE_URL}/rest/v1/station_flow?group_id=eq.${encodeURIComponent(group)}`, {
-        method: "DELETE",
-        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
-      });
-      await fetch(`${SUPABASE_URL}/rest/v1/station_flow`, {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(basePayload)
-      });
-    }
-
     closeFlowModal();
     const clearOld = confirm(`✓ 【${group} - ${viewRound.label}】的專屬流程圖已成功儲存！（其他場次的流程圖不受影響）\n\n💡 建議：是否要一併清空【${group}】在【${viewRound.label}】的舊紀錄與庫存，以全新狀態開始計時？\n（點擊「確定」僅重置本場次紀錄；點擊「取消」保留目前紀錄）`);
     if (clearOld) {
@@ -2386,76 +2523,36 @@ async function saveCustomFlow() {
       } catch(e) {}
     }
 
-    // 🌟 若為目前進行中場次，同步更新每站的 station_wip：起始站 input_wip = 0，後續工站立即套用設定之半成品數 subInit
-    if (viewRound.isLive) {
-      try {
-        for (const st of activeStations) {
-          const preds = payload.filter(p => (p.next_station_id || "").trim() === st).map(p => (p.station_id || "").trim());
-          const isRoot = preds.length === 0;
-          const initialInput = isRoot ? 0 : (newGroupRaw[st]?.subInit ?? 0);
-
-          const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=eq.${encodeURIComponent(st)}&select=id,input_wip,output_wip`, {
-            headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
-          });
-          const existing = await checkRes.json();
-          if (Array.isArray(existing) && existing.length > 0) {
-            await fetch(`${SUPABASE_URL}/rest/v1/station_wip?id=eq.${existing[0].id}`, {
-              method: "PATCH",
-              headers: {
-                apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY,
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                input_wip: initialInput,
-                output_wip: clearOld ? 0 : existing[0].output_wip,
-                updated_at: new Date().toISOString()
-              })
-            });
-          } else {
-            await fetch(`${SUPABASE_URL}/rest/v1/station_wip`, {
-              method: "POST",
-              headers: {
-                apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY,
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({ group_id: group, station_id: st, input_wip: initialInput, output_wip: 0 })
-            });
-          }
-
-          // 若有附加專屬零件，同步更新 ${st}_RAW
-          if (newGroupRaw[st]?.hasRaw) {
-            const rawSt = `${st}_RAW`;
-            const rawInit = newGroupRaw[st].rawInit || 0;
-            const checkRaw = await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=eq.${encodeURIComponent(rawSt)}&select=id`, {
-              headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
-            });
-            const existingRaw = await checkRaw.json();
-            if (Array.isArray(existingRaw) && existingRaw.length > 0) {
-              if (clearOld) {
-                await fetch(`${SUPABASE_URL}/rest/v1/station_wip?id=eq.${existingRaw[0].id}`, {
-                  method: "PATCH",
-                  headers: {
-                    apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY,
-                    "Content-Type": "application/json"
-                  },
-                  body: JSON.stringify({ input_wip: rawInit, output_wip: 0, updated_at: new Date().toISOString() })
-                });
-              }
-            } else {
-              await fetch(`${SUPABASE_URL}/rest/v1/station_wip`, {
-                method: "POST",
-                headers: {
-                  apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY,
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ group_id: group, station_id: rawSt, input_wip: rawInit, output_wip: 0 })
-              });
-            }
-          }
-        }
-      } catch(errWip) {
-        console.warn("同步 station_wip 發生警告：", errWip);
+    // 🌟 僅寫入該場次專屬代號 (flowKey，如 G20-T2) 的 station_wip，並清除無後綴 group 的重複工站列
+    try {
+      if (flowKey !== group) {
+        await fetch(`${SUPABASE_URL}/rest/v1/station_wip?group_id=eq.${encodeURIComponent(group)}&station_id=not.in.(SYSTEM_MODE,GROUP_MODE)`, {
+          method: "DELETE",
+          headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }
+        });
       }
+
+      for (const st of activeStations) {
+        const preds = payload.filter(p => (p.next_station_id || "").trim() === st).map(p => (p.station_id || "").trim());
+        const isRoot = preds.length === 0;
+        const initialInput = isRoot ? 0 : (newGroupRaw[st]?.subInit ?? 0);
+
+        await upsertCloudWipRecord(flowKey, st, initialInput, 0, !clearOld);
+
+        // 若為後續工站 (前一站是半成品進入)，同步寫入本站專屬半成品 WIP 上限 (${st}_LIMIT)
+        if (!isRoot) {
+          const stMaxWip = newGroupRaw[st]?.maxWip ?? 0;
+          await upsertCloudWipRecord(flowKey, `${st}_LIMIT`, stMaxWip, 0, false);
+        }
+
+        // 若有附加專屬零件，同步更新 ${st}_RAW
+        if (newGroupRaw[st]?.hasRaw) {
+          const rawInit = newGroupRaw[st].rawInit || 0;
+          await upsertCloudWipRecord(flowKey, `${st}_RAW`, rawInit, 0, false);
+        }
+      }
+    } catch(errWip) {
+      console.warn("同步 station_wip 發生警告：", errWip);
     }
 
     loadAll();
